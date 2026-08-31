@@ -1,179 +1,158 @@
--- WakeWise MVP Schema v1
--- 字符集 utf8mb4，时间使用 UTC
-
-CREATE DATABASE IF NOT EXISTS wakewise
-    DEFAULT CHARACTER SET utf8mb4
-    DEFAULT COLLATE utf8mb4_unicode_ci;
-
-USE wakewise;
+-- WakeWise V1 初始 schema（依据《WakeWise-数据库设计》v1.0.0，MVP 精简版）
+-- 时间统一 UTC；ID 为 ULID VARCHAR(26)
 
 CREATE TABLE user_account (
-    id              CHAR(26)     NOT NULL,
-    device_id       VARCHAR(128) NOT NULL,
-    display_name    VARCHAR(80)  NOT NULL DEFAULT '',
-    timezone        VARCHAR(64)  NOT NULL DEFAULT 'Asia/Shanghai',
-    locale          VARCHAR(16)  NOT NULL DEFAULT 'zh-CN',
-    risk_preference ENUM('BALANCED','CONSERVATIVE','SLEEP_FIRST') NOT NULL DEFAULT 'BALANCED',
-    automation_level TINYINT     NOT NULL DEFAULT 0,
-    status          ENUM('ACTIVE','LOCKED','DELETING','DELETED') NOT NULL DEFAULT 'ACTIVE',
-    last_login_at   DATETIME(3)  NULL,
-    created_at      DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    updated_at      DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)) ON UPDATE UTC_TIMESTAMP(3),
-    version         BIGINT       NOT NULL DEFAULT 1,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_user_device (device_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id               VARCHAR(26)     NOT NULL PRIMARY KEY,
+    email            VARCHAR(254) NOT NULL,
+    password_hash    VARCHAR(100) NOT NULL,
+    display_name     VARCHAR(80)  NOT NULL,
+    timezone         VARCHAR(64)  NOT NULL DEFAULT 'Asia/Shanghai',
+    locale           VARCHAR(16)  NOT NULL DEFAULT 'zh-CN',
+    city             VARCHAR(80)  NULL,
+    risk_preference  VARCHAR(32)  NOT NULL DEFAULT 'BALANCED',
+    automation_level INT      NOT NULL DEFAULT 1,
+    status           VARCHAR(16)  NOT NULL DEFAULT 'ACTIVE',
+    last_login_at    DATETIME(3)  NULL,
+    created_at       DATETIME(3)  NOT NULL,
+    updated_at       DATETIME(3)  NOT NULL,
+    version          BIGINT       NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_user_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE alarm (
-    id                    CHAR(26)     NOT NULL,
-    user_id               CHAR(26)     NOT NULL,
-    name                  VARCHAR(100) NOT NULL,
-    target_type           ENUM('WAKE_AT','LEAVE_BY','ARRIVE_BY','EVENT') NOT NULL,
-    baseline_time         TIME         NULL,
-    target_at             DATETIME(3)  NULL,
-    calendar_event_ref    VARCHAR(160) NULL,
-    destination_label     VARCHAR(200) NULL,
-    travel_mode           ENUM('WALK','BIKE','TRANSIT','DRIVE','MIXED','NONE') NULL,
-    enabled               BOOLEAN      NOT NULL DEFAULT TRUE,
-    next_trigger_at       DATETIME(3)  NULL,
-    created_at            DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    updated_at            DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)) ON UPDATE UTC_TIMESTAMP(3),
-    version               BIGINT       NOT NULL DEFAULT 1,
-    PRIMARY KEY (id),
-    INDEX idx_alarm_user_enabled (user_id, enabled),
-    INDEX idx_alarm_next_trigger (next_trigger_at, enabled),
-    CONSTRAINT fk_alarm_user FOREIGN KEY (user_id) REFERENCES user_account(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id                VARCHAR(26)     NOT NULL PRIMARY KEY,
+    user_id           VARCHAR(26)     NOT NULL,
+    name              VARCHAR(100) NOT NULL,
+    target_type       VARCHAR(16)  NOT NULL COMMENT 'WAKE_AT / ARRIVE_BY',
+    baseline_time     TIME         NULL COMMENT 'WAKE_AT 基准起床时刻',
+    target_local_time TIME         NULL COMMENT 'ARRIVE_BY 目标到达时刻',
+    recurrence        VARCHAR(64)  NULL COMMENT '周几 CSV，如 MO,TU,WE,TH,FR；NULL=每天',
+    destination_label VARCHAR(120) NULL,
+    travel_mode       VARCHAR(16)  NULL COMMENT 'WALK/BIKE/TRANSIT/DRIVE/MIXED/NONE',
+    enabled           BOOLEAN      NOT NULL DEFAULT TRUE,
+    next_trigger_at   DATETIME(3)  NULL,
+    created_at        DATETIME(3)  NOT NULL,
+    updated_at        DATETIME(3)  NOT NULL,
+    version           BIGINT       NOT NULL DEFAULT 0,
+    KEY idx_alarm_user_enabled (user_id, enabled),
+    KEY idx_alarm_next_trigger (next_trigger_at, enabled)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE alarm_rule (
-    id                  CHAR(26)     NOT NULL,
-    alarm_id            CHAR(26)     NOT NULL,
-    rrule               VARCHAR(512) NULL,
-    prep_duration_min   SMALLINT     NOT NULL DEFAULT 30,
-    max_advance_min     SMALLINT     NOT NULL DEFAULT 30,
-    max_delay_min       SMALLINT     NOT NULL DEFAULT 10,
-    allow_auto_delay    BOOLEAN      NOT NULL DEFAULT FALSE,
-    automation_level    TINYINT      NOT NULL DEFAULT 0,
-    snooze_interval_min SMALLINT     NOT NULL DEFAULT 5,
-    max_snooze_count    TINYINT      NOT NULL DEFAULT 2,
-    wake_strategy_json  JSON         NOT NULL,
-    effective_from      DATE         NULL,
-    effective_until     DATE         NULL,
-    created_at          DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    updated_at          DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)) ON UPDATE UTC_TIMESTAMP(3),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_rule_alarm (alarm_id),
-    CONSTRAINT fk_rule_alarm FOREIGN KEY (alarm_id) REFERENCES alarm(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id                  VARCHAR(26)    NOT NULL PRIMARY KEY,
+    alarm_id            VARCHAR(26)    NOT NULL,
+    prep_duration_min   INT    NOT NULL,
+    commute_minutes     INT    NOT NULL DEFAULT 0,
+    max_advance_min     INT    NOT NULL,
+    max_delay_min       INT    NOT NULL,
+    allow_auto_delay    BOOLEAN     NOT NULL DEFAULT FALSE,
+    automation_level    INT     NOT NULL DEFAULT 1,
+    snooze_interval_min INT    NOT NULL DEFAULT 5,
+    max_snooze_count    INT     NOT NULL DEFAULT 2,
+    created_at          DATETIME(3) NOT NULL,
+    updated_at          DATETIME(3) NOT NULL,
+    UNIQUE KEY uk_rule_alarm (alarm_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE weather_cache (
-    id                CHAR(26)     NOT NULL,
+    id                VARCHAR(26)     NOT NULL PRIMARY KEY,
     provider          VARCHAR(32)  NOT NULL,
-    geo_hash          VARCHAR(12)  NOT NULL,
-    forecast_time     DATETIME(3)  NOT NULL,
+    city              VARCHAR(80)  NOT NULL,
+    forecast_time     DATETIME(3)  NOT NULL COMMENT '预报目标时段起点',
     observed_at       DATETIME(3)  NOT NULL,
     temperature_c     DECIMAL(5,2) NULL,
-    feels_like_c      DECIMAL(5,2) NULL,
     precip_probability DECIMAL(5,4) NULL,
     precip_mm         DECIMAL(8,2) NULL,
-    visibility_m      INT          NULL,
-    wind_speed_mps    DECIMAL(6,2) NULL,
-    aqi               SMALLINT     NULL,
+    weather_code      INT          NULL,
     alert_level       VARCHAR(24)  NULL,
-    quality_score     DECIMAL(5,4) NOT NULL DEFAULT 1.0,
-    payload_json      JSON         NOT NULL,
+    quality_score     DECIMAL(5,4) NOT NULL,
+    payload_json      TEXT         NULL,
     expires_at        DATETIME(3)  NOT NULL,
-    created_at        DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_weather (provider, geo_hash, forecast_time, observed_at),
-    INDEX idx_weather_expire (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    created_at        DATETIME(3)  NOT NULL,
+    KEY idx_weather_lookup (city, forecast_time, observed_at),
+    KEY idx_weather_expire (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE decision_history (
-    id                      CHAR(26)     NOT NULL,
-    plan_id                 CHAR(26)     NOT NULL,
-    user_id                 CHAR(26)     NOT NULL,
-    alarm_id                CHAR(26)     NOT NULL,
-    baseline_at             DATETIME(3)  NOT NULL,
-    recommended_at          DATETIME(3)  NOT NULL,
-    effective_at            DATETIME(3)  NULL,
-    status                  ENUM('PROPOSED','PENDING','ARMED','REVERTED','FAILED','EXECUTED') NOT NULL DEFAULT 'PROPOSED',
-    risk_score              DECIMAL(7,4) NOT NULL DEFAULT 0,
-    late_probability        DECIMAL(6,5) NOT NULL DEFAULT 0,
-    confidence              DECIMAL(5,4) NOT NULL DEFAULT 1.0,
-    factor_contribution_json JSON        NOT NULL,
-    context_snapshot_json   JSON         NOT NULL,
-    reason_code             VARCHAR(64)  NOT NULL,
-    explanation             VARCHAR(1000) NOT NULL DEFAULT '',
-    policy_version          VARCHAR(40)  NOT NULL DEFAULT 'v1.0.0',
-    model_version           VARCHAR(40)  NOT NULL DEFAULT 'v1.0.0',
-    created_at              DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    updated_at              DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)) ON UPDATE UTC_TIMESTAMP(3),
-    version                 BIGINT       NOT NULL DEFAULT 1,
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_decision_plan (plan_id),
-    INDEX idx_decision_alarm_time (alarm_id, created_at),
-    INDEX idx_decision_user_status (user_id, status, created_at),
-    CONSTRAINT fk_decision_user FOREIGN KEY (user_id) REFERENCES user_account(id),
-    CONSTRAINT fk_decision_alarm FOREIGN KEY (alarm_id) REFERENCES alarm(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id                      VARCHAR(26)      NOT NULL PRIMARY KEY,
+    plan_id                 VARCHAR(26)      NOT NULL,
+    user_id                 VARCHAR(26)      NOT NULL,
+    alarm_id                VARCHAR(26)      NOT NULL,
+    baseline_at             DATETIME(3)   NOT NULL,
+    recommended_at          DATETIME(3)   NOT NULL,
+    target_at               DATETIME(3)   NOT NULL,
+    effective_at            DATETIME(3)   NULL,
+    status                  VARCHAR(24)   NOT NULL COMMENT 'PROPOSED/DISPATCHING/ARMED/REVERTED/EXECUTED/SUPERSEDED/FAILED',
+    delta_minutes           INT           NOT NULL,
+    late_probability_before DECIMAL(6,5)  NOT NULL,
+    late_probability_after  DECIMAL(6,5)  NOT NULL,
+    risk_score              DECIMAL(7,4)  NOT NULL,
+    confidence              DECIMAL(5,4)  NOT NULL,
+    factor_contribution_json TEXT      NOT NULL,
+    reason_code             VARCHAR(64)   NOT NULL,
+    explanation             VARCHAR(1000) NOT NULL,
+    model_version           VARCHAR(40)   NOT NULL,
+    trigger_type            VARCHAR(32)   NOT NULL DEFAULT 'MANUAL',
+    created_at              DATETIME(3)   NOT NULL,
+    updated_at              DATETIME(3)   NOT NULL,
+    version                 BIGINT        NOT NULL DEFAULT 0,
+    UNIQUE KEY uk_plan (plan_id),
+    KEY idx_decision_alarm (alarm_id, created_at),
+    KEY idx_decision_user_status (user_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE wake_history (
-    id              CHAR(26)     NOT NULL,
-    user_id         CHAR(26)     NOT NULL,
-    alarm_id        CHAR(26)     NOT NULL,
-    plan_id         CHAR(26)     NULL,
-    scheduled_at    DATETIME(3)  NOT NULL,
-    triggered_at    DATETIME(3)  NULL,
-    dismissed_at    DATETIME(3)  NULL,
-    woke_at         DATETIME(3)  NULL,
-    departed_at     DATETIME(3)  NULL,
-    arrived_at      DATETIME(3)  NULL,
-    snooze_count    TINYINT      NOT NULL DEFAULT 0,
-    outcome         ENUM('SUCCESS','LATE','MISSED','UNKNOWN') NOT NULL DEFAULT 'UNKNOWN',
-    source_flags    SET('USER','DEVICE','LOCATION','CALENDAR') NULL,
-    created_at      DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    PRIMARY KEY (id),
-    INDEX idx_wake_user_time (user_id, scheduled_at),
-    INDEX idx_wake_alarm_time (alarm_id, scheduled_at),
-    CONSTRAINT fk_wake_user FOREIGN KEY (user_id) REFERENCES user_account(id),
-    CONSTRAINT fk_wake_alarm FOREIGN KEY (alarm_id) REFERENCES alarm(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id           VARCHAR(26)    NOT NULL PRIMARY KEY,
+    user_id      VARCHAR(26)    NOT NULL,
+    alarm_id     VARCHAR(26)    NOT NULL,
+    plan_id      VARCHAR(26)    NULL,
+    scheduled_at DATETIME(3) NOT NULL,
+    triggered_at DATETIME(3) NULL,
+    dismissed_at DATETIME(3) NULL,
+    snooze_count INT     NOT NULL DEFAULT 0,
+    outcome      VARCHAR(16) NOT NULL DEFAULT 'UNKNOWN' COMMENT 'SUCCESS/LATE/MISSED/UNKNOWN',
+    created_at   DATETIME(3) NOT NULL,
+    KEY idx_wake_user_time (user_id, scheduled_at),
+    KEY idx_wake_alarm_time (alarm_id, scheduled_at),
+    KEY idx_wake_plan (plan_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE notification (
-    id                  CHAR(26)     NOT NULL,
-    user_id             CHAR(26)     NOT NULL,
-    decision_id         CHAR(26)     NULL,
-    type                VARCHAR(40)  NOT NULL,
-    channel             ENUM('IN_APP','PUSH','EMAIL','WEARABLE') NOT NULL DEFAULT 'IN_APP',
-    title               VARCHAR(160) NOT NULL,
-    body                VARCHAR(1000) NOT NULL,
-    status              ENUM('PENDING','SENT','DELIVERED','OPENED','FAILED') NOT NULL DEFAULT 'PENDING',
-    provider_message_id VARCHAR(160) NULL,
-    idempotency_key     VARCHAR(100) NULL,
-    sent_at             DATETIME(3)  NULL,
-    delivered_at        DATETIME(3)  NULL,
-    opened_at           DATETIME(3)  NULL,
-    failure_code        VARCHAR(64)  NULL,
-    created_at          DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_notification_idempotency (idempotency_key),
-    INDEX idx_notification_user_time (user_id, created_at),
-    INDEX idx_notification_status (status, created_at),
-    CONSTRAINT fk_notification_user FOREIGN KEY (user_id) REFERENCES user_account(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id          VARCHAR(26)      NOT NULL PRIMARY KEY,
+    user_id     VARCHAR(26)      NOT NULL,
+    decision_id VARCHAR(26)      NULL,
+    type        VARCHAR(40)   NOT NULL,
+    title       VARCHAR(160)  NOT NULL,
+    body        VARCHAR(1000) NOT NULL,
+    status      VARCHAR(16)   NOT NULL DEFAULT 'SENT',
+    read_at     DATETIME(3)   NULL,
+    created_at  DATETIME(3)   NOT NULL,
+    KEY idx_notification_user (user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE feedback (
-    id              CHAR(26)     NOT NULL,
-    user_id         CHAR(26)     NOT NULL,
-    decision_id     CHAR(26)     NULL,
-    wake_history_id CHAR(26)     NULL,
-    rating          TINYINT      NOT NULL,
-    reason_code     VARCHAR(64)  NOT NULL,
-    comment         VARCHAR(1000) NULL,
-    created_at      DATETIME(3)  NOT NULL DEFAULT (UTC_TIMESTAMP(3)),
-    PRIMARY KEY (id),
-    INDEX idx_feedback_decision (decision_id),
-    INDEX idx_feedback_user_time (user_id, created_at),
-    CONSTRAINT fk_feedback_user FOREIGN KEY (user_id) REFERENCES user_account(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    id          VARCHAR(26)      NOT NULL PRIMARY KEY,
+    user_id     VARCHAR(26)      NOT NULL,
+    decision_id VARCHAR(26)      NULL,
+    rating      INT       NOT NULL,
+    reason_code VARCHAR(64)   NOT NULL,
+    comment     VARCHAR(1000) NULL,
+    created_at  DATETIME(3)   NOT NULL,
+    KEY idx_feedback_user (user_id, created_at),
+    KEY idx_feedback_decision (decision_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE behavior_learning (
+    id                VARCHAR(26)       NOT NULL PRIMARY KEY,
+    user_id           VARCHAR(26)       NOT NULL,
+    segment_key       VARCHAR(100)   NOT NULL,
+    feature_key       VARCHAR(64)    NOT NULL COMMENT 'WAKE_LATENCY/PREP_DURATION/TRAVEL_DURATION',
+    estimate          DECIMAL(12,4)  NOT NULL,
+    variance          DECIMAL(14,6)  NULL,
+    sample_count      INT            NOT NULL DEFAULT 0,
+    last_sample_at    DATETIME(3)    NULL,
+    algorithm_version VARCHAR(40)    NOT NULL DEFAULT 'PRIOR_V1',
+    created_at        DATETIME(3)    NOT NULL,
+    updated_at        DATETIME(3)    NOT NULL,
+    UNIQUE KEY uk_behavior (user_id, segment_key, feature_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

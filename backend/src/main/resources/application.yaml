@@ -3,23 +3,20 @@ spring:
     name: wakewise
 
   datasource:
-    url: jdbc:mysql://localhost:3306/wakewise?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8mb4
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:wakewise}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&createDatabaseIfNotExist=true
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:zjrwjh999}
+    password: ${SQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10
-      minimum-idle: 5
-      connection-timeout: 30000
+      minimum-idle: 2
 
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
-    show-sql: false
     properties:
       hibernate:
-        format_sql: true
         jdbc:
           time_zone: UTC
 
@@ -28,78 +25,29 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      timeout: 3000ms
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
   quartz:
-    job-store-type: jdbc
-    jdbc:
-      initialize-schema: never
-    properties:
-      org.quartz:
-        scheduler:
-          instanceName: WakeWiseScheduler
-          instanceId: AUTO
-        jobStore:
-          class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
-          driverDelegateClass: org.quartz.impl.jdbcjobstore.StdJDBCDelegate
-          tablePrefix: QRTZ_
-          isClustered: true
-          clusterCheckinInterval: 20000
-        threadPool:
-          class: org.quartz.simpl.SimpleThreadPool
-          threadCount: 5
-          threadPriority: 5
-
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${AUTH_ISSUER_URI:http://localhost:8080}
+    job-store-type: memory
 
 server:
   port: 8080
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,metrics
-  endpoint:
-    health:
-      show-details: when-authorized
+wakewise:
+  jwt:
+    # 生产环境务必通过环境变量注入强随机密钥（>= 32 字节）
+    secret: ${JWT_SECRET:wakewise-dev-only-secret-key-change-me-0123456789}
+    ttl-minutes: 720
+  nightly-plan-cron: "0 0 22 * * ?"
+  default-zone: Asia/Shanghai
+  decision:
+    safety-buffer-minutes-balanced: 5
+    safety-buffer-minutes-conservative: 8
+    safety-buffer-minutes-sleep-first: 3
+    auto-arm-max-advance-minutes: 30
 
 logging:
   level:
-    com.wjh.backend: DEBUG
-    org.springframework.security: INFO
-
-# ===== WakeWise 业务配置 =====
-wakewise:
-  weather:
-    provider: qweather
-    api-key: ${WEATHER_API_KEY:}
-    base-url: https://devapi.qweather.com/v7
-    cache-ttl-minutes: 30
-  agent:
-    nightly-plan-cron: "0 0 22 * * ?"       # 每晚 22:00
-    pre-sleep-review-cron: "0 0 23 * * ?"    # 睡前复核 23:00
-    morning-review-cron: "0 0 5 * * ?"       # 凌晨 5:00 二次确认
-  decision:
-    max-advance-minutes: 30
-    max-delay-minutes: 10
-    default-prep-minutes: 30
-    confidence-threshold: 0.6
-
-# ===== LangChain4j =====
-langchain4j:
-  open-ai:
-    chat-model:
-      api-key: ${LLM_API_KEY:}
-      model-name: gpt-4o-mini
-      temperature: 0.3
-      max-tokens: 500
-      timeout: 30s
+    com.wjh.wakewise: INFO

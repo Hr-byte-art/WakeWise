@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">知晨 WakeWise</string>
+
+    <!-- 通知渠道 -->
+    <string name="channel_alarm_name">闹钟响铃</string>
+    <string name="channel_alarm_desc">关键晨间闹钟，醒铃优先级最高</string>
+    <string name="ring_default_title">WakeWise 晨间闹钟</string>
+    <string name="ring_default_text">起床时间到</string>
+    <string name="ring_goal">为 %1$s 前到达预留时间</string>
+    <string name="btn_snooze">贪睡 5 分钟</string>
+    <string name="btn_dismiss">关闭</string>
+
+    <!-- 登录 -->
+    <string name="login">登录</string>
+    <string name="register">注册</string>
+    <string name="switch_to_register">没有账号？去注册</string>
+    <string name="switch_to_login">已有账号？去登录</string>
+    <string name="hint_email">邮箱</string>
+    <string name="hint_password">密码</string>
+    <string name="hint_display_name">昵称</string>
+    <string name="hint_city">城市（用于天气）</string>
+    <string name="error_fill_all">请填写完整信息</string>
+    <string name="error_pick_day">请至少选择一个星期</string>
+    <string name="error_network">网络异常，请稍后重试</string>
+
+    <!-- 首页 -->
+    <string name="home_no_plan">明早暂无晨间计划，去创建一个目标吧</string>
+    <string name="home_for_event">为「%1$s」 %2$s</string>
+    <string name="home_leave_by">建议 %1$s 出门</string>
+    <string name="home_delta_early">比原计划提前 %1$d 分钟</string>
+    <string name="home_delta_late">比原计划延后 %1$d 分钟</string>
+    <string name="home_traffic">通勤预估 %1$d 分钟（拥堵时 %2$d 分钟）</string>
+    <string name="btn_confirm">确认计划</string>
+    <string name="btn_revert">恢复原计划</string>
+    <string name="offline_hint">云端暂不可达 · 已下发的本地闹钟仍会正常响铃</string>
+
+    <!-- 闹钟 -->
+    <string name="alarms_title">晨间目标</string>
+    <string name="alarms_empty">还没有目标。点右下角 + 创建第一个“到达目标”</string>
+    <string name="alarm_next">下一次 %1$s</string>
+    <string name="alarm_paused">已暂停</string>
+    <string name="delete_alarm_title">删除闹钟</string>
+    <string name="delete_alarm_message">确定停用「%1$s」吗？历史记录会保留。</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+    <string name="new_alarm_title">新建晨间目标</string>
+    <string name="save">保存</string>
+    <string name="label_name">名称</string>
+    <string name="label_time">时间（HH:mm）</string>
+    <string name="label_destination">目的地（可选）</string>
+    <string name="label_prep">准备时长（分钟）</string>
+    <string name="label_commute">通勤时长（分钟）</string>
+    <string name="label_max_advance">最大提前（分钟）</string>
+    <string name="label_automation">自动化等级</string>
+    <string name="label_days">重复</string>
+
+    <!-- 统计 -->
+    <string name="stats_title">本周晨间洞察</string>
+    <string name="stats_on_time">准时率</string>
+    <string name="stats_tracked">记录晨间</string>
+    <string name="stats_adjust">平均调整</string>
+    <string name="stats_acceptance">建议采纳率</string>
+    <string name="stats_risk_title">主要风险来源</string>
+    <string name="stats_no_risk">暂无数据</string>
+    <string name="btn_logout">退出登录</string>
+
+    <string-array name="alarm_types">
+        <item>目标到达（几点前必须到）</item>
+        <item>固定起床（几点响铃）</item>
+    </string-array>
+    <string-array name="travel_modes">
+        <item>步行</item>
+        <item>骑行</item>
+        <item>公交/地铁</item>
+        <item>驾车</item>
+        <item>混合</item>
+        <item>不需要通勤</item>
+    </string-array>
+    <string-array name="automation_levels">
+        <item>L0 仅观察</item>
+        <item>L1 每次需确认</item>
+        <item>L2 边界内自动</item>
+    </string-array>
+    <string-array name="week_days">
+        <item>一</item>
+        <item>二</item>
+        <item>三</item>
+        <item>四</item>
+        <item>五</item>
+        <item>六</item>
+        <item>日</item>
+    </string-array>
+</resources>
