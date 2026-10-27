@@ -71,6 +71,10 @@
     <string name="label_max_advance">最大提前（分钟）</string>
     <string name="label_automation">自动化等级</string>
     <string name="label_days">重复</string>
+    <string name="btn_import_calendar">从日历导入明日首个日程</string>
+    <string name="toast_event_filled">已填入明日日程：%1$s · %2$s</string>
+    <string name="toast_no_event_tomorrow">明日日历暂无可用日程</string>
+    <string name="toast_calendar_denied">未授权读取日历，可在系统设置中开启</string>
 
     <!-- 统计 -->
     <string name="stats_title">本周晨间洞察</string>

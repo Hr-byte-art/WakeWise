@@ -44,6 +44,7 @@ WakeWise/
 └── android/             # 原生 Android 客户端
     └── app/src/main/java/com/wjh/wakewise/
         ├── alarm/           # AlarmManager 精确调度、响铃前台服务、开机重排
+        ├── calendar/         # CalendarProvider 明日首个事件读取（导入闹钟）
         ├── sync/            # 计划同步 Worker（pending → 调度 → ACK）
         ├── data/            # Room 本地缓存 + outbox 事件
         ├── network/         # Retrofit 接口
@@ -82,7 +83,7 @@ MYSQL_USER=root MYSQL_PASSWORD=你的密码 mvn spring-boot:run
 
 1. 用 Android Studio（Ladybug+，AGP 8.5）打开 `android/` 目录，或直接运行 `./gradlew assembleDebug`——仓库已包含 Gradle Wrapper（8.7）。
 2. 后端地址默认 `http://10.0.2.2:8080/api/v1/`（模拟器访问宿主机）；真机调试请在 `data/SessionManager.java` 中改成电脑局域网 IP。明文 http 仅 debug 构建允许（见 `networkSecurityConfig`），release 包需 https 后端地址。
-3. 模拟器/真机运行：注册账号（城市填中文如"北京"即可触发真实天气）→ 新建"目标到达"闹钟 → 首页查看决策计划 → 确认/恢复。
+3. 模拟器/真机运行：注册账号（城市填中文如"北京"即可触发真实天气）→ 新建"目标到达"闹钟 → 首页查看决策计划 → 确认/恢复。编辑页可点"从日历导入明日首个日程"自动填时间（需授权读取日历；模拟器日历需先建一条明日非全天事件）。
 
 ## 核心设计
 
@@ -139,7 +140,8 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 - 交通 ETA：MVP 使用用户设置的通勤估计 + 天气修正，未接地图 API（决策引擎预留了口子）。
 - 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备/通勤时长仍用用户设置值；出门事件（USER_LEFT_HOME）仅积累数据、暂不参与决策；`occurredAt` 信任客户端时钟，偏差治理留待后续。
 - LLM 解释文案：已实装 OpenAI 兼容可配置客户端（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 三项留空即纯模板、零感知）；自研轻量 RestClient 客户端而非 Spring AI（Spring AI 1.0 官方仅支持 Boot 3.4+，本项目钉在 Boot 3.3，接口留有替换位）。
-- 日历接入、推送（FCM）为下一阶段工作。
+- 日历接入（一期已实装）：闹钟编辑页可"从日历导入"明日首个非全天日历事件，自动填目标到达时间（名称/地点为空时一并带上；运行时申请 READ_CALENDAR，拒绝或无日程只提示、不影响手动建闹钟）；多日历账户选择、后台自动读取为规划。
+- 推送（FCM）为下一阶段工作。
 - `application.yaml` 的 JWT 密钥是开发默认值，生产必须通过环境变量注入强随机密钥。
 
 ## 历史版本

@@ -1,6 +1,9 @@
 package com.wjh.wakewise.ui;
 
+import android.Manifest;
 import android.app.TimePickerDialog;
+import android.content.Context;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,11 +11,15 @@ import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.wjh.wakewise.R;
+import com.wjh.wakewise.calendar.TomorrowEventFinder;
 import com.wjh.wakewise.common.Async;
 import com.wjh.wakewise.databinding.FragmentAlarmEditBinding;
 import com.wjh.wakewise.network.ApiClient;
@@ -36,6 +43,16 @@ public class AlarmEditFragment extends Fragment {
 
     private FragmentAlarmEditBinding binding;
     private String selectedTime = "08:45";
+
+    /** 日历读取授权（点"从日历导入"时按需申请，拒绝只提示不阻塞）。 */
+    private final ActivityResultLauncher<String> calendarPermission =
+            registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+                if (granted) {
+                    importFromCalendar();
+                } else {
+                    Toast.makeText(requireContext(), R.string.toast_calendar_denied, Toast.LENGTH_SHORT).show();
+                }
+            });
 
     @Nullable
     @Override
@@ -66,8 +83,50 @@ public class AlarmEditFragment extends Fragment {
             }, hour, minute, true).show();
         });
 
+        binding.btnImportCalendar.setOnClickListener(v -> {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.READ_CALENDAR)
+                    == PackageManager.PERMISSION_GRANTED) {
+                importFromCalendar();
+            } else {
+                calendarPermission.launch(Manifest.permission.READ_CALENDAR);
+            }
+        });
+
         binding.btnSave.setOnClickListener(v -> save());
         return binding.getRoot();
+    }
+
+    /**
+     * 从系统日历读取明日首个非全天事件，自动填目标到达时间（名称/目的地为空时一并带上）。
+     * 增强链路：无日程/查询失败只 Toast 提示，不影响手动建闹钟。
+     */
+    private void importFromCalendar() {
+        Context context = requireContext().getApplicationContext();
+        Async.run(() -> {
+            TomorrowEventFinder.NextEvent event = TomorrowEventFinder.firstEventTomorrow(context);
+            Async.main(() -> {
+                if (binding == null) {
+                    return;
+                }
+                if (event == null) {
+                    Toast.makeText(context, R.string.toast_no_event_tomorrow, Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                selectedTime = String.format(Locale.US, "%02d:%02d",
+                        event.start().getHour(), event.start().getMinute());
+                binding.inputTime.setText(selectedTime);
+                if (binding.inputName.getText().toString().trim().isEmpty()) {
+                    binding.inputName.setText(event.title());
+                }
+                if (event.location() != null
+                        && binding.inputDestination.getText().toString().trim().isEmpty()) {
+                    binding.inputDestination.setText(event.location());
+                }
+                Toast.makeText(context,
+                        getString(R.string.toast_event_filled, selectedTime, event.title()),
+                        Toast.LENGTH_LONG).show();
+            });
+        });
     }
 
     private void save() {

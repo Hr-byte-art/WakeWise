@@ -11,9 +11,10 @@
 | 行为学习 | ✅ 一期已实现 | 起床延迟 SHRINK_V1 收缩估计（≥5 样本生效）；出门事件（USER_LEFT_HOME）埋点积累中；准备/通勤校准、时间衰减、影子评估为规划 |
 | 晨间简报（API + 响铃页展示 + 离线缓存兜底） | ✅ 已实现 | 出门打卡通知一并落地 |
 | LLM 解释生成（OpenAI 兼容端点可配，模板兜底） | ✅ 已实现 | 自研轻量 RestClient 客户端（非 Spring AI，见 Q3）；三项环境变量留空即纯模板零感知；红线：LLM 只改写文案不算时间 |
+| 日历接入（一期） | ✅ 已实现 | Android CalendarProvider 导入明日首个非全天事件自动填目标到达时间/地点（纯端侧、运行时授权、失败只提示）；多日历选择/后台自动读取为规划 |
 | Morning Agent | ⚠️ 部分 | 当前为 Quartz 夜间任务（22:00）+ 自动布防边界判定；无 Spring AI、无工具调用 |
 | 技术栈 | ⚠️ 如实表述 | Java 21 + Spring Boot + MySQL(Flyway) + JWT + Quartz + OpenAI 兼容 LLM 端点（解释文案）+ **原生 Android**(Java/Room/WorkManager)；Spring AI、Redis、RabbitMQ、Docker 为规划 |
-| 交通 ETA API、日历接入、MCP 工具沙箱、自然语言提案 | ❌ 规划 | 决策引擎与解释层均已留端口 |
+| 交通 ETA API、MCP 工具沙箱、自然语言提案 | ❌ 规划 | 决策引擎与解释层均已留端口 |
 
 本文第 2、4 节部分段落按“设计终态”撰写，与当前代码的差异处均以（规划）/（已实现）就地标注。
 
