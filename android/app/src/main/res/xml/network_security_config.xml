@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 默认（release）禁止明文流量；debug 构建由 src/debug/res/xml 同名资源覆盖为允许 -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

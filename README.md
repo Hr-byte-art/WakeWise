@@ -11,7 +11,7 @@ WakeWise 不是一个"根据天气提前几分钟"的闹钟，而是一套晨间
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| 客户端 | **原生 Android（Java 17 + XML + MVVM）** | 精确闹钟、全屏响铃、开机重排、离线兜底 |
+| 客户端 | **原生 Android（Java 17 + XML + ViewBinding）** | 精确闹钟、全屏响铃、开机重排、离线兜底 |
 | 后端 | **Spring Boot 3.3 + Java 21**（模块化单体） | 决策引擎、可靠性链路、Quartz 夜间任务 |
 | 存储 | MySQL 8（Flyway 迁移） | 事务与审计数据 |
 | 外部数据 | Open-Meteo（天气，免 Key） | 失败自动降级 |
@@ -69,8 +69,8 @@ MYSQL_USER=root MYSQL_PASSWORD=你的密码 mvn spring-boot:run
 
 ### Android 客户端
 
-1. 用 Android Studio（Ladybug+，AGP 8.5）打开 `android/` 目录；首次同步会自动下载依赖（本仓库未带 Gradle Wrapper jar，Studio 会提示生成，点确认即可）。
-2. 后端地址默认 `http://10.0.2.2:8080/api/v1/`（模拟器访问宿主机）；真机调试请在 `data/SessionManager.java` 中改成电脑局域网 IP。
+1. 用 Android Studio（Ladybug+，AGP 8.5）打开 `android/` 目录，或直接运行 `./gradlew assembleDebug`——仓库已包含 Gradle Wrapper（8.7）。
+2. 后端地址默认 `http://10.0.2.2:8080/api/v1/`（模拟器访问宿主机）；真机调试请在 `data/SessionManager.java` 中改成电脑局域网 IP。明文 http 仅 debug 构建允许（见 `networkSecurityConfig`），release 包需 https 后端地址。
 3. 模拟器/真机运行：注册账号（城市填中文如"北京"即可触发真实天气）→ 新建"目标到达"闹钟 → 首页查看决策计划 → 确认/恢复。
 
 ## 核心设计
