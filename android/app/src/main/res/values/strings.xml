@@ -45,6 +45,13 @@
     <string name="ring_brief_alert_suffix"> · 天气预警</string>
     <string name="ring_brief_offline">简报暂不可达 · 闹钟不受影响</string>
 
+    <!-- 出门打卡 -->
+    <string name="channel_reminder_name">出门提醒</string>
+    <string name="channel_reminder_desc">关闭闹钟后的出门打卡，用于学习你的准备时长</string>
+    <string name="ring_left_home_title">出门打卡</string>
+    <string name="ring_left_home_text">真的起了？出门时点一下</string>
+    <string name="ring_left_home_action">我出门了</string>
+
     <!-- 闹钟 -->
     <string name="alarms_title">晨间目标</string>
     <string name="alarms_empty">还没有目标。点右下角 + 创建第一个“到达目标”</string>

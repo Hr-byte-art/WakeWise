@@ -16,6 +16,7 @@ import android.os.Vibrator;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 import com.wjh.wakewise.R;
 import com.wjh.wakewise.WakeWiseApp;
@@ -31,6 +32,8 @@ public class RingtoneService extends Service {
     public static final String ACTION_SNOOZE = "com.wjh.wakewise.action.SNOOZE";
     private static final long SNOOZE_MILLIS = 5 * 60_000L;
     private static final int NOTIFICATION_ID = 1001;
+    public static final int NOTIFICATION_ID_LEAVE = 1002;
+    private static final long LEAVE_NOTIFICATION_TIMEOUT_MILLIS = 2 * 60 * 60_000L;
 
     private MediaPlayer player;
     private Vibrator vibrator;
@@ -46,6 +49,7 @@ public class RingtoneService extends Service {
         if (ACTION_STOP.equals(action)) {
             EventReporter.report(this, planId, "ALARM_DISMISSED");
             stopRinging();
+            showLeftHomeNotification(planId);
             return START_NOT_STICKY;
         }
         if (ACTION_SNOOZE.equals(action)) {
@@ -82,6 +86,37 @@ public class RingtoneService extends Service {
 
         startSound();
         startVibration();
+    }
+
+    /**
+     * 关闭闹钟后发"出门打卡"提醒：为准备时长校准积累 USER_LEFT_HOME 样本。
+     * 2 小时未点自动过期；本地兜底闹钟（无 planId）与通知权限被拒时静默跳过。
+     */
+    private void showLeftHomeNotification(String planId) {
+        if (planId == null || planId.isEmpty()) {
+            return;
+        }
+        NotificationManagerCompat nm = NotificationManagerCompat.from(this);
+        if (!nm.areNotificationsEnabled()) {
+            return;
+        }
+        Intent left = new Intent(this, LeftHomeReceiver.class);
+        left.putExtra(AlarmReceiver.EXTRA_PLAN_ID, planId);
+        PendingIntent leftPi = PendingIntent.getBroadcast(this, planId.hashCode(), left,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        PendingIntent openPi = open == null ? null : PendingIntent.getActivity(this, 2002, open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Notification notification = new NotificationCompat.Builder(this, WakeWiseApp.CHANNEL_REMINDER)
+                .setSmallIcon(R.drawable.ic_alarm)
+                .setContentTitle(getString(R.string.ring_left_home_title))
+                .setContentText(getString(R.string.ring_left_home_text))
+                .addAction(0, getString(R.string.ring_left_home_action), leftPi)
+                .setContentIntent(openPi)
+                .setAutoCancel(true)
+                .setTimeoutAfter(LEAVE_NOTIFICATION_TIMEOUT_MILLIS)
+                .build();
+        nm.notify(NOTIFICATION_ID_LEAVE, notification);
     }
 
     private void startSound() {

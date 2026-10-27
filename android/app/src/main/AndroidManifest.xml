@@ -44,6 +44,10 @@
             android:exported="false" />
 
         <receiver
+            android:name=".alarm.LeftHomeReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".alarm.BootReceiver"
             android:enabled="true"
             android:exported="true">
