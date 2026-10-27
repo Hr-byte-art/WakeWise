@@ -7,4 +7,5 @@
     <color name="text_primary">#1A1D29</color>
     <color name="ring_background">#10131C</color>
     <color name="ring_accent">#FFB020</color>
+    <color name="ring_brief_text">#DEFFFFFF</color>
 </resources>

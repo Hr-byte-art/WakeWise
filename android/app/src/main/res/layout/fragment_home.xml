@@ -142,6 +142,16 @@
         </com.google.android.material.card.MaterialCardView>
 
         <TextView
+            android:id="@+id/txt_calibration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="13sp"
+            android:textColor="@color/text_primary"
+            android:alpha="0.6"
+            android:visibility="gone" />
+
+        <TextView
             android:id="@+id/txt_offline"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

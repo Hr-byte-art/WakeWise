@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment;
 
 import com.wjh.wakewise.R;
 import com.wjh.wakewise.common.Async;
+import com.wjh.wakewise.data.MorningBriefStore;
 import com.wjh.wakewise.databinding.FragmentHomeBinding;
 import com.wjh.wakewise.network.ApiClient;
 import com.wjh.wakewise.network.ApiErrors;
@@ -63,6 +64,8 @@ public class HomeFragment extends Fragment {
                 if (!response.isSuccessful() || body == null || !body.success) {
                     throw new IllegalStateException("context");
                 }
+                // 落一份缓存，响铃页离线兜底用
+                MorningBriefStore.write(requireContext(), body.data);
                 Async.main(() -> render(body.data));
             } catch (Exception e) {
                 Async.main(() -> {
@@ -134,6 +137,15 @@ public class HomeFragment extends Fragment {
             binding.txtTraffic.setText(line);
         } else {
             binding.txtTraffic.setVisibility(View.GONE);
+        }
+
+        // 行为学习校准提示（后端样本足够时才有）
+        if (context.calibration != null && context.calibration.sampleCount >= 5) {
+            binding.txtCalibration.setVisibility(View.VISIBLE);
+            binding.txtCalibration.setText(
+                    getString(R.string.home_calibrated, context.calibration.sampleCount));
+        } else {
+            binding.txtCalibration.setVisibility(View.GONE);
         }
     }
 

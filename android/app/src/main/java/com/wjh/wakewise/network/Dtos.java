@@ -217,6 +217,14 @@ public final class Dtos {
         public TrafficDto traffic;
         public EventDto firstEvent;
         public String updatedAt;
+        public CalibrationDto calibration;
+    }
+
+    /** 行为学习校准信息（后端样本不足时为 null）。 */
+    public static class CalibrationDto {
+        public int sampleCount;
+        public double estimateMinutes;
+        public String algorithmVersion;
     }
 
     public static class WakePlanDto {
