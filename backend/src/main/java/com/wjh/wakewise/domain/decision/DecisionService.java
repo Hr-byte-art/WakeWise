@@ -286,22 +286,14 @@ public class DecisionService {
         Instant occurredAt = request.occurredAt() == null || request.occurredAt().isBlank()
                 ? Instant.now()
                 : Instant.parse(request.occurredAt());
+        // 字段级幂等的状态迁移收在 WakeHistory.applyDeviceEvent（纯方法可单测）：
+        // ALARM_FIRED 保首次响铃（贪睡重报不覆盖），USER_LEFT_HOME 只记第一次出门时刻
         switch (request.type()) {
-            case "ALARM_FIRED" -> wakeHistory.setTriggeredAt(occurredAt);
-            case "ALARM_SNOOZED" -> wakeHistory.setSnoozeCount(wakeHistory.getSnoozeCount() + 1);
+            case "ALARM_FIRED", "ALARM_SNOOZED", "USER_LEFT_HOME" ->
+                    wakeHistory.applyDeviceEvent(request.type(), occurredAt, history.getTargetAt());
             case "ALARM_DISMISSED" -> {
-                if (wakeHistory.getTriggeredAt() == null) {
-                    wakeHistory.setTriggeredAt(occurredAt);
-                }
-                wakeHistory.setDismissedAt(occurredAt);
-                wakeHistory.setOutcome(occurredAt.isAfter(history.getTargetAt()) ? "LATE" : "SUCCESS");
+                wakeHistory.applyDeviceEvent(request.type(), occurredAt, history.getTargetAt());
                 history.setStatus(PlanStatus.EXECUTED);
-            }
-            case "USER_LEFT_HOME" -> {
-                // 字段级幂等：outbox 重放/重复上报只记第一次出门时刻
-                if (wakeHistory.getLeftHomeAt() == null) {
-                    wakeHistory.setLeftHomeAt(occurredAt);
-                }
             }
             default -> log.debug("Ignoring device event type {}", request.type());
         }

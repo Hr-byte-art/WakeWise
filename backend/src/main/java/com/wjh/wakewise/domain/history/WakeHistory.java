@@ -54,6 +54,38 @@ public class WakeHistory {
         }
     }
 
+    /**
+     * 应用一条设备事件（纯状态迁移，字段级幂等，供 DecisionService 事件入口调用）。
+     *
+     * ALARM_FIRED 只记第一次响铃：贪睡后同 planId 会再次触发并重报 FIRED，
+     * 若按 last-write 覆盖，校准样本 latency = dismissedAt − 末次响铃，会把贪睡时间
+     * 整段挤掉，与估计算法"贪睡计入起床延迟"的建模语义相反（见 WakeLatencyEstimator 注释）。
+     */
+    public void applyDeviceEvent(String type, Instant occurredAt, Instant targetAt) {
+        switch (type) {
+            case "ALARM_FIRED" -> {
+                if (triggeredAt == null) {
+                    triggeredAt = occurredAt;
+                }
+            }
+            case "ALARM_SNOOZED" -> snoozeCount++;
+            case "ALARM_DISMISSED" -> {
+                if (triggeredAt == null) {
+                    triggeredAt = occurredAt;
+                }
+                dismissedAt = occurredAt;
+                outcome = occurredAt.isAfter(targetAt) ? "LATE" : "SUCCESS";
+            }
+            case "USER_LEFT_HOME" -> {
+                // 字段级幂等：outbox 重放/重复上报只记第一次出门时刻
+                if (leftHomeAt == null) {
+                    leftHomeAt = occurredAt;
+                }
+            }
+            default -> { /* 未知事件由调用方记日志，这里不动状态 */ }
+        }
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getUserId() { return userId; }
