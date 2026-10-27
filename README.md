@@ -33,6 +33,7 @@ WakeWise/
 │       └── domain/
 │           ├── user/        # 注册/登录
 │           ├── alarm/       # 闹钟 CRUD + 规则
+│           ├── behavior/    # 行为学习（起床延迟 SHRINK_V1 校准）
 │           ├── weather/     # Open-Meteo 客户端 + 缓存降级
 │           ├── decision/    # 分位数决策引擎 + 计划状态机 + 设备同步
 │           ├── morning/     # 晨间简报
@@ -83,6 +84,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 ```
 
 - 分位数 `q` 由用户风险偏好决定：睡眠优先≈P60 / 平衡≈P75 / 保守≈P90。
+- 起床延迟 P50/P90 支持按用户历史校准：从 `wake_history` 真实样本（dismissedAt − triggeredAt）算经验分位数并与全局先验收缩混合（SHRINK_V1）；样本不足 5 条时保持固定先验，冷启动行为与旧版一致，校准参与决策时 modelVersion 标注 `QUANTILE_V1+CAL(n=N)`。
 - 硬约束：调整必须落在 `[基准−最大提前, 基准+最大延后]` 内，且不晚于目标前 15 分钟；延后需用户显式授权。
 - 平静期规则：无外部风险信号且提前量不足 10 分钟时不折腾，保持原计划（计划变化成本）。
 - 迟到概率用正态 CDF 闭式计算；输出带因素归因（通勤波动余量 / 降水增量 / 安全余量），解释文本只引用计划事实，LLM 不参与时间计算。
@@ -94,6 +96,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
   → 用户确认（L2 且高置信度可自动）→ DISPATCHING
   → 客户端 GET /device-plans/pending → 端侧精确调度 → 先建新后删旧 → POST ack → ARMED
   → 响铃/关闭/贪睡 → POST /device-events（失败落 outbox 补报）
+  → 关闭后可"出门打卡"（USER_LEFT_HOME）→ 为准备时长校准积累样本（一期只积累不消费）
 ```
 
 - 新计划未 ACK 前，旧计划永不下线；同闹钟 ACK 成功后旧计划才标记 SUPERSEDED。
@@ -124,7 +127,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 
 - iOS：客户端为原生 Android，暂无 iOS 版本（旧 Flutter 端可从 git 历史恢复参考）。
 - 交通 ETA：MVP 使用用户设置的通勤估计 + 天气修正，未接地图 API（决策引擎预留了口子）。
-- 行为学习：`behavior_learning` 表已建，个人参数校准（起床延迟/准备时长自适应）尚未实装，当前用固定先验。
+- 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备/通勤时长仍用用户设置值；出门事件（USER_LEFT_HOME）仅积累数据、暂不参与决策；`occurredAt` 信任客户端时钟，偏差治理留待后续。
 - 日历接入、推送（FCM）、LLM 解释（Spring AI）为下一阶段工作。
 - `application.yaml` 的 JWT 密钥是开发默认值，生产必须通过环境变量注入强随机密钥。
 

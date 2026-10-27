@@ -165,6 +165,8 @@ erDiagram
 
 索引：`idx_wake_user_time(user_id, scheduled_at)`、`idx_wake_alarm_time(alarm_id, scheduled_at)`。
 
+> 当前实现：`woke_at/departed_at/arrived_at/source_flags` 未建列；V2 迁移以 `left_home_at DATETIME(3) NULL` 落地 `departed_at` 的第一期形态——由 `USER_LEFT_HOME` 事件（出门打卡）写入，只积累数据、暂不参与决策。
+
 ### 3.7 `decision_history` — 决策历史
 
 | 字段 | 类型 | 约束 | 说明 |
@@ -210,6 +212,8 @@ erDiagram
 | `updated_at` | `DATETIME(3)` | NOT NULL | 更新时间 |
 
 唯一索引：`uk_behavior(user_id, segment_key, feature_key)`。
+
+> 当前实现（SHRINK_V1）：`segment_key` 一期固定 `ALL`，`feature_key` 仅用 `WAKE_LATENCY`；`estimate` 存校准后 P50（分钟）、`variance` 存分钟²，P90 = estimate + 1.2816 × √variance（与引擎 sigma 公式自洽）；样本不足 5 条时写入全局先验 4/8。写入时机：`ALARM_DISMISSED` 事件提交后重算（单一写入点，变更可追溯到一次明确的关闭事件）。
 
 ### 3.9 `notification` — 通知记录
 
