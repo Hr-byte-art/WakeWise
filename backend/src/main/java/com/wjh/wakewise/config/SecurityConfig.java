@@ -21,6 +21,9 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // knife4j / OpenAPI 文档页面与资源
+                        .requestMatchers("/doc.html", "/webjars/**", "/v3/api-docs/**",
+                                "/swagger-ui/**", "/swagger-ui.html", "/favicon.ico").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
                     response.setStatus(401);

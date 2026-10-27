@@ -21,6 +21,8 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <ulid.version>5.2.3</ulid.version>
+        <knife4j.version>4.5.0</knife4j.version>
+        <springdoc.version>2.6.0</springdoc.version>
     </properties>
 
     <dependencies>
@@ -81,6 +83,19 @@
             <groupId>com.github.f4b6a3</groupId>
             <artifactId>ulid-creator</artifactId>
             <version>${ulid.version}</version>
+        </dependency>
+
+        <!-- API 文档:knife4j UI(基于 springdoc-openapi3),入口 /doc.html -->
+        <dependency>
+            <groupId>com.github.xiaoymin</groupId>
+            <artifactId>knife4j-openapi3-jakarta-spring-boot-starter</artifactId>
+            <version>${knife4j.version}</version>
+        </dependency>
+        <!-- 显式钉住 springdoc 版本以兼容 Spring Boot 3.3(knife4j 4.5.0 的传递依赖较旧) -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
         </dependency>
 
         <dependency>

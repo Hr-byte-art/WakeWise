@@ -48,6 +48,18 @@ wakewise:
     safety-buffer-minutes-sleep-first: 3
     auto-arm-max-advance-minutes: 30
 
+# API 文档(knife4j):http://localhost:8080/doc.html
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
 logging:
   level:
     com.wjh.wakewise: INFO

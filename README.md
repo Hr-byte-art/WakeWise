@@ -118,7 +118,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 | POST | `/feedback` | 反馈 |
 | GET | `/statistics/weekly` | 周度统计 |
 
-完整契约见《相关文档/WakeWise-API设计.md》（MVP 有少量精简：评估为同步返回、认证为 JWT、未引入 RabbitMQ/Redis——按 PRD 路线图它们属于 V1）。
+完整契约见《相关文档/WakeWise-API设计.md》（MVP 有少量精简：评估为同步返回、认证为 JWT、未引入 RabbitMQ/Redis——按 PRD 路线图它们属于 V1）。后端启动后也可访问在线文档 `http://localhost:8080/doc.html`（knife4j），点 Authorize 填入登录返回的 JWT 即可直接调试接口。
 
 ## 已知限制（诚实清单）
 
