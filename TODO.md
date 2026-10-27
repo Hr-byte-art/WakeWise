@@ -17,6 +17,7 @@
 - [ ] **校准断言**：`SELECT * FROM behavior_learning` 出一行（sample_count=6、SHRINK_V1、estimate≈5.36）；`GET /morning/context` 返回 `calibration` 字段；再 evaluate 一次，新计划详情 modelVersion = `QUANTILE_V1+CAL(n=6)`；后端日志出现 `Wake latency calibrated`
 - [ ] **出门事件幂等**：同一 planId 连发两次 USER_LEFT_HOME（不同 eventId、同 occurredAt）→ `SELECT left_home_at FROM wake_history WHERE plan_id=...` 只记第一次
 - [ ] **贪睡语义回归**（`ecea2e8` 修复项）：同一 planId 依次发 ALARM_FIRED(t0) → ALARM_SNOOZED → ALARM_FIRED(t0+5min) → ALARM_DISMISSED(t0+12min) → `triggered_at` 应为 t0（首次响铃），校准样本延迟含贪睡 5 分钟
+- [ ] **BYOK 运行时冒烟**（`af862e4` 后端 + `e9411cb` Android 实装）：起后端 → knife4j `GET /me/external-services` 看默认状态（AMAP/LLM 按 `AMAP_KEY`/`LLM_*` 是否配置显示 SERVER 或 OFF）→ PUT 用户级高德 key（真 key）→ evaluate 的 modelVersion 含 `+ETA`、traffic.etaSource=AMAP → PUT `{disabled:true}` → evaluate 回落手填分钟且无报错 → GET 确认任何响应都无 api_key 明文；LLM 三项同理（配真端点看 LLM 文案、只填两项看 400 提示）；App 端统计页入口 → 设置页四态流转（继承→你的 key→禁用→恢复默认）
 
 ### Android（需要模拟器/真机）
 
@@ -34,7 +35,7 @@
 - [x] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）（2026-10-27，`8af9d61`，assembleDebug 通过；运行时验证见第一节"日历导入"）
 - [ ] **准备时长校准**：消费已积累的 `left_home_at` 样本（攒够 ≥5 条后实施），替换固定 PREP_P90_FACTOR；一期只埋点未消费
 - [x] **eventId 服务端全局去重**：V3 `device_event` 流水表 event_id 唯一键，入口存在性跳过 + 并发约束兜底（2026-10-27，`57ea72c`，28/28 测试绿；运行时验证见第一节）
-- [ ] **外部服务凭据用户级配置（App 设置页 BYOK）**：统一设置页支持用户自带高德 key 与 LLM 三项（新表存 per-user 凭据，api_key 加密落库、接口只写不回显明文），解析链"用户级 > 服务端默认(环境变量) > 关闭"；`AmapClient`/`LlmChatClient` 改按凭据构造，`ExplanationGenerator.generate` 需加 userId 参数。约一天，单租户 demo 下非刚需，价值在架构完整性（BYOK 成本隔离/隐私）
+- [x] **外部服务凭据用户级配置（App 设置页 BYOK）**：统一设置页支持用户自带高德 key 与 LLM 三项（V5 `user_credential` 表存 per-user 凭据，api_key AES-256-GCM 加密落库、接口只写不回显明文、每服务支持显式禁用并回显生效来源），解析链"用户显式禁用 > 用户级 > 服务端默认(环境变量) > 关闭"，凭据解析永不抛、失败回落服务端默认；`AmapClient`/`LlmChatClient` 改按调用传凭据，`ExplanationGenerator.generate` 增参传的是解析后的 `LlmEndpoint` 而非原写的 userId（保持 ai/ 层纯函数可测，按实际实现修正表述）（2026-10-27，后端 `af862e4` + Android `e9411cb`，后端 57/57 绿 + assembleDebug 通过；运行时冒烟见第一节）
 - [ ] **客户端时钟偏差治理**：occurredAt 信任设备时钟，README 诚实清单已提
 - [ ] ~~不做（明确排除）~~：iOS、FCM 推送（国内不可靠且轮询+ACK 已够用）、多设备协同——避免误起炉灶
 
