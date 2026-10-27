@@ -34,7 +34,7 @@
 - [x] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）（2026-10-27，`8af9d61`，assembleDebug 通过；运行时验证见第一节"日历导入"）
 - [ ] **准备时长校准**：消费已积累的 `left_home_at` 样本（攒够 ≥5 条后实施），替换固定 PREP_P90_FACTOR；一期只埋点未消费
 - [x] **eventId 服务端全局去重**：V3 `device_event` 流水表 event_id 唯一键，入口存在性跳过 + 并发约束兜底（2026-10-27，`57ea72c`，28/28 测试绿；运行时验证见第一节）
-- [ ] **LLM 用户级配置（App 设置页）**：新表存 per-user base-url/api-key/model（api_key 加密、接口只写不回显），`LlmChatClient` 按 userId 解析（用户级 > 服务端默认 > 纯模板），Android 设置页三输入框；`ExplanationGenerator.generate` 需加 userId 参数（调用点仅 DecisionService.compute 一处）
+- [ ] **外部服务凭据用户级配置（App 设置页 BYOK）**：统一设置页支持用户自带高德 key 与 LLM 三项（新表存 per-user 凭据，api_key 加密落库、接口只写不回显明文），解析链"用户级 > 服务端默认(环境变量) > 关闭"；`AmapClient`/`LlmChatClient` 改按凭据构造，`ExplanationGenerator.generate` 需加 userId 参数。约一天，单租户 demo 下非刚需，价值在架构完整性（BYOK 成本隔离/隐私）
 - [ ] **客户端时钟偏差治理**：occurredAt 信任设备时钟，README 诚实清单已提
 - [ ] ~~不做（明确排除）~~：iOS、FCM 推送（国内不可靠且轮询+ACK 已够用）、多设备协同——避免误起炉灶
 
