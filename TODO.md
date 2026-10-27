@@ -10,7 +10,8 @@
 
 ### 后端（需要本地 MySQL 8 + JDK 21）
 
-- [ ] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1+V2+V3 无报错
+- [ ] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1~V4 无报错
+- [ ] **真实 ETA 冒烟**（`e9c2aed` 一期实装）：`AMAP_KEY=<key>` 起后端 → PATCH /auth/me 设家址 → 建 ARRIVE_BY 闹钟（真实目的地）→ evaluate 后 modelVersion 含 `+ETA`、morning/context traffic 的 etaSource=AMAP 且分钟为真实值；不配 key 重启 → 回落手填分钟、traffic.etaSource 为 null、无报错
 - [ ] **eventId 全局去重**（`57ea72c` V3 实装）：同一 eventId 连发两次 ALARM_SNOOZED → `SELECT snooze_count FROM wake_history WHERE plan_id=...` 只计 1 次，两次请求均返回成功
 - [ ] **造历史触发校准**：开 doc.html（`http://localhost:8080/doc.html`，Authorize 填登录 JWT）→ 注册（城市"北京"）→ 建 ARRIVE_BY 闹钟（08:45 / prep 30 / commute 40 / maxAdvance 30）→ 循环 6 轮：`POST /decisions/evaluate` 拿新 planId → 对每个 planId 发两条 device-events：ALARM_FIRED（如 `22:45:00Z`）+ ALARM_DISMISSED（依次延迟 3/5/6/7/9/12 分钟，occurredAt 全 UTC）
 - [ ] **校准断言**：`SELECT * FROM behavior_learning` 出一行（sample_count=6、SHRINK_V1、estimate≈5.36）；`GET /morning/context` 返回 `calibration` 字段；再 evaluate 一次，新计划详情 modelVersion = `QUANTILE_V1+CAL(n=6)`；后端日志出现 `Wake latency calibrated`
@@ -29,7 +30,7 @@
 ## 二、待做：后续功能（按优先级）
 
 - [x] **LLM 解释生成**：OpenAI 兼容轻量客户端接入现有 `ExplanationGenerator` 接口（base-url/api-key/model 用户可配，留空纯模板），模板兜底。红线：LLM 只写文案不算时间（2026-10-27，`5283be5`，测试 28/28 绿；真 key 冒烟——配 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 起 evaluate 看 LLM 文案、错 key 看回落——待有 key 时顺手跑）
-- [ ] **真实交通 ETA**：高德 Web 服务 API（免费额度够 demo 用），决策引擎已预留口子
+- [x] **真实交通 ETA**：高德 Web 服务 API 一期——地理编码缓存坐标 + 按方式路径规划 + 2h 快照，modelVersion 标 `+ETA`，失败逐字节回落手填分钟（2026-10-27，`e9c2aed`，后端 40/40 绿 + assembleDebug 通过；真 key 冒烟见第一节）
 - [x] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）（2026-10-27，`8af9d61`，assembleDebug 通过；运行时验证见第一节"日历导入"）
 - [ ] **准备时长校准**：消费已积累的 `left_home_at` 样本（攒够 ≥5 条后实施），替换固定 PREP_P90_FACTOR；一期只埋点未消费
 - [x] **eventId 服务端全局去重**：V3 `device_event` 流水表 event_id 唯一键，入口存在性跳过 + 并发约束兜底（2026-10-27，`57ea72c`，28/28 测试绿；运行时验证见第一节）
