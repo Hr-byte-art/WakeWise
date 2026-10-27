@@ -26,7 +26,7 @@
 
 ## 二、待做：后续功能（按优先级）
 
-- [ ] **LLM 解释生成**：接 Spring AI 到现有 `ExplanationGenerator` 接口，模板兜底。红线：LLM 只写文案不算时间
+- [x] **LLM 解释生成**：OpenAI 兼容轻量客户端接入现有 `ExplanationGenerator` 接口（base-url/api-key/model 用户可配，留空纯模板），模板兜底。红线：LLM 只写文案不算时间（2026-10-27，`5283be5`，测试 28/28 绿；真 key 冒烟——配 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 起 evaluate 看 LLM 文案、错 key 看回落——待有 key 时顺手跑）
 - [ ] **真实交通 ETA**：高德 Web 服务 API（免费额度够 demo 用），决策引擎已预留口子
 - [ ] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）
 - [ ] **准备时长校准**：消费已积累的 `left_home_at` 样本（攒够 ≥5 条后实施），替换固定 PREP_P90_FACTOR；一期只埋点未消费
