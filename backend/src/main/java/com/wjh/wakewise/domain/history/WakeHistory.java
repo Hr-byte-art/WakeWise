@@ -34,6 +34,10 @@ public class WakeHistory {
     @Column(name = "dismissed_at")
     private Instant dismissedAt;
 
+    /** 出门时刻（USER_LEFT_HOME 事件写入，行为学习一期只积累不消费）。 */
+    @Column(name = "left_home_at")
+    private Instant leftHomeAt;
+
     @Column(name = "snooze_count", nullable = false)
     private int snoozeCount = 0;
 
@@ -64,6 +68,8 @@ public class WakeHistory {
     public void setTriggeredAt(Instant triggeredAt) { this.triggeredAt = triggeredAt; }
     public Instant getDismissedAt() { return dismissedAt; }
     public void setDismissedAt(Instant dismissedAt) { this.dismissedAt = dismissedAt; }
+    public Instant getLeftHomeAt() { return leftHomeAt; }
+    public void setLeftHomeAt(Instant leftHomeAt) { this.leftHomeAt = leftHomeAt; }
     public int getSnoozeCount() { return snoozeCount; }
     public void setSnoozeCount(int snoozeCount) { this.snoozeCount = snoozeCount; }
     public String getOutcome() { return outcome; }

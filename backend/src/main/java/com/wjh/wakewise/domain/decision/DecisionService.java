@@ -297,6 +297,12 @@ public class DecisionService {
                 wakeHistory.setOutcome(occurredAt.isAfter(history.getTargetAt()) ? "LATE" : "SUCCESS");
                 history.setStatus(PlanStatus.EXECUTED);
             }
+            case "USER_LEFT_HOME" -> {
+                // 字段级幂等：outbox 重放/重复上报只记第一次出门时刻
+                if (wakeHistory.getLeftHomeAt() == null) {
+                    wakeHistory.setLeftHomeAt(occurredAt);
+                }
+            }
             default -> log.debug("Ignoring device event type {}", request.type());
         }
     }
