@@ -14,6 +14,7 @@
 - [ ] **造历史触发校准**：开 doc.html（`http://localhost:8080/doc.html`，Authorize 填登录 JWT）→ 注册（城市"北京"）→ 建 ARRIVE_BY 闹钟（08:45 / prep 30 / commute 40 / maxAdvance 30）→ 循环 6 轮：`POST /decisions/evaluate` 拿新 planId → 对每个 planId 发两条 device-events：ALARM_FIRED（如 `22:45:00Z`）+ ALARM_DISMISSED（依次延迟 3/5/6/7/9/12 分钟，occurredAt 全 UTC）
 - [ ] **校准断言**：`SELECT * FROM behavior_learning` 出一行（sample_count=6、SHRINK_V1、estimate≈5.36）；`GET /morning/context` 返回 `calibration` 字段；再 evaluate 一次，新计划详情 modelVersion = `QUANTILE_V1+CAL(n=6)`；后端日志出现 `Wake latency calibrated`
 - [ ] **出门事件幂等**：同一 planId 连发两次 USER_LEFT_HOME（不同 eventId、同 occurredAt）→ `SELECT left_home_at FROM wake_history WHERE plan_id=...` 只记第一次
+- [ ] **贪睡语义回归**（`ecea2e8` 修复项）：同一 planId 依次发 ALARM_FIRED(t0) → ALARM_SNOOZED → ALARM_FIRED(t0+5min) → ALARM_DISMISSED(t0+12min) → `triggered_at` 应为 t0（首次响铃），校准样本延迟含贪睡 5 分钟
 
 ### Android（需要模拟器/真机）
 
@@ -35,6 +36,7 @@
 
 ## 三、已完成
 
+- [x] **贪睡时间从校准样本丢失的修复**（2026-10-27，`ecea2e8`）：代码走查发现贪睡后同 planId 重报 ALARM_FIRED 会覆盖 `triggered_at`（last-write），校准样本只算末次响铃到关闭、贪睡时长被挤掉，与"贪睡计入起床延迟"的建模语义相反。改为 first-write-wins，事件状态迁移收进 `WakeHistory.applyDeviceEvent` 纯方法并补 5 例回归测试（后端 18/18 绿）；运行时回归用例见上方第一节"贪睡语义回归"
 - [x] **路演文档对齐实现**（2026-10-27）：修正 Flutter→原生 Android、技术栈如实化（Spring AI/Redis/RabbitMQ 标规划）、四类目标→两类、四级→三级自动化、Quartz 单实例如实表述、Q5/Q6 问答对齐当前实现、演示故事线全部改为当前可演示步骤；文档头新增"实现状态速览"表，面试前先看那张表
 - [x] **行为学习一期**：起床延迟 SHRINK_V1 校准 + 响铃页晨间简报 + 出门打卡（2026-10-27，`87d3858`→`502f1a3` 共 5 提交，已推 origin/main）
   - 备注 1：后端单测 13/13 绿（WakeLatencyEstimatorTest 6 + DecisionEngineTest 7），Android assembleDebug 通过；端到端验证未跑 → 见上方第一节
