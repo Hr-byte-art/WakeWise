@@ -270,6 +270,22 @@ erDiagram
 
 索引：`idx_conversation_session(session_id, created_at)`、`idx_conversation_retention(retention_until)`。
 
+### 3.12 `device_event` — 设备事件流水（V3 实装）
+
+| 字段 | 类型 | 约束 | 说明 |
+|---|---|---|---|
+| `id` | `CHAR(26)` | PK | 记录 ID |
+| `event_id` | `VARCHAR(64)` | UNIQUE, NOT NULL | 客户端生成的事件 ID（`evt-` + UUID），全局去重键 |
+| `user_id` | `CHAR(26)` | FK, NOT NULL | 用户 ID |
+| `plan_id` | `CHAR(26)` | NOT NULL | 关联决策计划 |
+| `type` | `VARCHAR(32)` | NOT NULL | `ALARM_FIRED/ALARM_SNOOZED/ALARM_DISMISSED/USER_LEFT_HOME` |
+| `occurred_at` | `DATETIME(3)` | NULL | 客户端上报时刻，缺省为服务端接收时刻 |
+| `received_at` | `DATETIME(3)` | NOT NULL | 服务端接收时刻 |
+
+索引：`uk_device_event(event_id)` 唯一。
+
+> 事件入口先按 `event_id` 存在性跳过重复（outbox 重放/客户端重试返回成功以便清理 outbox），并发窗口内的重复由唯一约束回滚兜底——修复 `ALARM_SNOOZED` 重复上报多计贪睡次数的口子。
+
 ## 4. 关系与一致性规则
 
 1. 删除/停用 `alarm` 时不删除历史决策与执行记录，只进行状态变更。

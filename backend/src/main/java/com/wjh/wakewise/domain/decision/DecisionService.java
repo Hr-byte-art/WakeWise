@@ -13,6 +13,8 @@ import com.wjh.wakewise.domain.alarm.AlarmRuleRepository;
 import com.wjh.wakewise.domain.alarm.Recurrence;
 import com.wjh.wakewise.domain.behavior.BehaviorLearningService;
 import com.wjh.wakewise.domain.decision.DecisionHistory.PlanStatus;
+import com.wjh.wakewise.domain.history.DeviceEvent;
+import com.wjh.wakewise.domain.history.DeviceEventRepository;
 import com.wjh.wakewise.domain.history.WakeHistory;
 import com.wjh.wakewise.domain.history.WakeHistoryRepository;
 import com.wjh.wakewise.domain.notification.NotificationService;
@@ -47,6 +49,7 @@ public class DecisionService {
     private final AlarmRepository alarmRepository;
     private final AlarmRuleRepository ruleRepository;
     private final WakeHistoryRepository wakeHistoryRepository;
+    private final DeviceEventRepository deviceEventRepository;
     private final BehaviorLearningService behaviorLearningService;
     private final WeatherService weatherService;
     private final DecisionEngine engine;
@@ -60,6 +63,7 @@ public class DecisionService {
                            AlarmRepository alarmRepository,
                            AlarmRuleRepository ruleRepository,
                            WakeHistoryRepository wakeHistoryRepository,
+                           DeviceEventRepository deviceEventRepository,
                            BehaviorLearningService behaviorLearningService,
                            WeatherService weatherService,
                            DecisionEngine engine,
@@ -71,6 +75,7 @@ public class DecisionService {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.wakeHistoryRepository = wakeHistoryRepository;
+        this.deviceEventRepository = deviceEventRepository;
         this.behaviorLearningService = behaviorLearningService;
         this.weatherService = weatherService;
         this.engine = engine;
@@ -271,6 +276,12 @@ public class DecisionService {
 
     @Transactional
     public void recordDeviceEvent(String userId, DecisionDtos.DeviceEventRequest request) {
+        // eventId 全局去重（V3）：outbox 重放/客户端重试的重复事件在此幂等跳过，
+        // 返回成功以便客户端安全清理 outbox；并发窗口内的重复由 uk_device_event 唯一约束回滚兜底
+        if (deviceEventRepository.existsByEventId(request.eventId())) {
+            log.debug("Duplicate device event ignored: eventId={}", request.eventId());
+            return;
+        }
         DecisionHistory history = ownedPlan(userId, request.planId());
         WakeHistory wakeHistory = wakeHistoryRepository.findByPlanId(history.getPlanId())
                 .orElseGet(() -> {
@@ -297,6 +308,16 @@ public class DecisionService {
             }
             default -> log.debug("Ignoring device event type {}", request.type());
         }
+
+        // 落事件流水：uk_device_event 唯一键兜底并发重复（约束冲突整体回滚，客户端重试后 exists 命中即幂等）
+        DeviceEvent entry = new DeviceEvent();
+        entry.setId(Ids.newId());
+        entry.setEventId(request.eventId());
+        entry.setUserId(userId);
+        entry.setPlanId(history.getPlanId());
+        entry.setType(request.type());
+        entry.setOccurredAt(occurredAt);
+        deviceEventRepository.save(entry);
     }
 
     // ------------------------------------------------------------------ 供夜间任务 / 简报 / 统计

@@ -367,7 +367,7 @@
 
 支持离线上报补发（客户端 outbox）。`type` 取值：`ALARM_FIRED` / `ALARM_SNOOZED` / `ALARM_DISMISSED` / `USER_LEFT_HOME`（出门打卡，一期只积累数据不参与决策）。
 
-幂等性（当前实现，如实说明）：每计划在 `wake_history` 聚合为一行——重复 `ALARM_DISMISSED` 覆盖同值无副作用；`USER_LEFT_HOME` 由 `left_home_at` 非空检查保证只记首次；`ALARM_SNOOZED` 重复上报会多计贪睡次数（`eventId` 的服务端全局去重属后续工作）。`ALARM_DISMISSED` 事件提交后会触发起床延迟校准重算（SHRINK_V1），校准失败仅记日志、不影响事件链路。
+幂等性（当前实现，如实说明）：两层——① `eventId` 全局去重（V3 起 `device_event` 流水表唯一键，outbox 重放/客户端重试在入口即幂等跳过并返回成功，并发重复由唯一约束回滚兜底）；② 字段级幂等（每计划在 `wake_history` 聚合为一行：`ALARM_FIRED` 保首次响铃、`USER_LEFT_HOME` 只记第一次出门时刻、重复 `ALARM_DISMISSED` 覆盖同值无副作用）。`ALARM_DISMISSED` 事件提交后会触发起床延迟校准重算（SHRINK_V1），校准失败仅记日志、不影响事件链路。
 
 ## 6. 晨间上下文 API
 
