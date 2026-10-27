@@ -6,6 +6,7 @@ import com.wjh.wakewise.network.Dtos.AuthData;
 import com.wjh.wakewise.network.Dtos.ConfirmRequest;
 import com.wjh.wakewise.network.Dtos.CreateAlarmRequest;
 import com.wjh.wakewise.network.Dtos.DeviceEventRequest;
+import com.wjh.wakewise.network.Dtos.ExternalServiceStatusDto;
 import com.wjh.wakewise.network.Dtos.LoginRequest;
 import com.wjh.wakewise.network.Dtos.MorningContextDto;
 import com.wjh.wakewise.network.Dtos.PendingPlanDto;
@@ -13,6 +14,7 @@ import com.wjh.wakewise.network.Dtos.PlanViewDto;
 import com.wjh.wakewise.network.Dtos.RegisterRequest;
 import com.wjh.wakewise.network.Dtos.RevertRequest;
 import com.wjh.wakewise.network.Dtos.ToggleAlarmRequest;
+import com.wjh.wakewise.network.Dtos.UpdateCredentialRequest;
 import com.wjh.wakewise.network.Dtos.UpdateProfileRequest;
 import com.wjh.wakewise.network.Dtos.UserProfile;
 import com.wjh.wakewise.network.Dtos.WeeklyStatsDto;
@@ -24,6 +26,7 @@ import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.PATCH;
 import retrofit2.http.POST;
+import retrofit2.http.PUT;
 import retrofit2.http.Path;
 
 public interface ApiService {
@@ -69,4 +72,13 @@ public interface ApiService {
 
     @GET("statistics/weekly")
     Call<ApiEnvelope<WeeklyStatsDto>> weeklyStats();
+
+    /** BYOK：两服务（AMAP/LLM）当前生效来源，api_key 不回显。 */
+    @GET("me/external-services")
+    Call<ApiEnvelope<List<ExternalServiceStatusDto>>> externalServices();
+
+    /** BYOK：写入用户级凭据 / 显式禁用（disabled=true）/ 全空清除恢复继承。 */
+    @PUT("me/external-services/{service}")
+    Call<ApiEnvelope<ExternalServiceStatusDto>> updateExternalService(@Path("service") String service,
+                                                                      @Body UpdateCredentialRequest request);
 }

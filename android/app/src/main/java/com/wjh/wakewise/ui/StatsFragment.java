@@ -37,6 +37,11 @@ public class StatsFragment extends Fragment {
                              @Nullable Bundle savedInstanceState) {
         binding = FragmentStatsBinding.inflate(inflater, container, false);
         binding.btnHomeAddress.setOnClickListener(v -> promptHomeAddress());
+        binding.btnSettings.setOnClickListener(v -> {
+            if (getActivity() instanceof MainActivity main) {
+                main.openSettings();
+            }
+        });
         binding.btnLogout.setOnClickListener(v -> {
             new SessionManager(requireContext()).logout();
             if (getActivity() instanceof MainActivity main) {

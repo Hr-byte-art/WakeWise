@@ -70,6 +70,10 @@ public class MainActivity extends AppCompatActivity {
         show(new AlarmEditFragment());
     }
 
+    public void openSettings() {
+        show(new SettingsFragment());
+    }
+
     private void show(Fragment fragment) {
         getSupportFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, fragment)

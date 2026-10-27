@@ -91,6 +91,25 @@
     <string name="stats_home_hint">如：北京市海淀区中关村大街1号</string>
     <string name="stats_home_saved">已保存，通勤估算将从这里出发</string>
 
+    <!-- 设置（BYOK 外部服务凭据） -->
+    <string name="settings_entry">外部服务与凭据（BYOK）</string>
+    <string name="settings_title">外部服务（BYOK）</string>
+    <string name="settings_byok_note">凭据加密存储在服务端，只写不回显；不配置则用服务端默认</string>
+    <string name="settings_amap_title">高德地图 · 真实交通 ETA</string>
+    <string name="settings_llm_title">LLM · 晨间解释文案</string>
+    <string name="settings_source_label">当前生效：%1$s</string>
+    <string name="settings_amap_hint">高德 Web 服务 key（lbs.amap.com 申请）</string>
+    <string name="settings_llm_base_url_hint">Base URL（到 /v1，如 https://api.deepseek.com/v1）</string>
+    <string name="settings_llm_api_key_hint">API Key</string>
+    <string name="settings_llm_model_hint">模型名（如 deepseek-chat）</string>
+    <string name="settings_save">保存凭据</string>
+    <string name="settings_clear">恢复默认</string>
+    <string name="settings_disable">禁用此服务</string>
+    <string name="settings_disabled_now">已禁用</string>
+    <string name="settings_saved">已保存，下次评估即生效</string>
+    <string name="settings_cleared">已恢复默认配置</string>
+    <string name="settings_llm_partial">LLM 三项（Base URL / API Key / 模型）需同时填写</string>
+
     <string-array name="alarm_types">
         <item>目标到达（几点前必须到）</item>
         <item>固定起床（几点响铃）</item>

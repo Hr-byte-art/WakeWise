@@ -277,4 +277,30 @@ public final class Dtos {
         public double recommendationAcceptanceRate;
         public List<String> topRiskFactors;
     }
+
+    // ---------------- 设置（BYOK 外部服务凭据） ----------------
+
+    /** 服务状态回显：api_key 不回显；sourceLabel 中文（你的配置生效中/服务端默认/已禁用/未启用）。 */
+    public static class ExternalServiceStatusDto {
+        public String service;
+        public String source;
+        public String sourceLabel;
+        public String baseUrl;
+        public String model;
+    }
+
+    /** PUT /me/external-services/{service}：凭据字段与 disabled 互斥；LLM 三项须同填；全空 = 清除恢复继承。 */
+    public static class UpdateCredentialRequest {
+        public String apiKey;
+        public String baseUrl;
+        public String model;
+        public Boolean disabled;
+
+        public UpdateCredentialRequest(String apiKey, String baseUrl, String model, Boolean disabled) {
+            this.apiKey = apiKey;
+            this.baseUrl = baseUrl;
+            this.model = model;
+            this.disabled = disabled;
+        }
+    }
 }
