@@ -35,6 +35,7 @@
 
 ## 三、已完成
 
+- [x] **路演文档对齐实现**（2026-10-27）：修正 Flutter→原生 Android、技术栈如实化（Spring AI/Redis/RabbitMQ 标规划）、四类目标→两类、四级→三级自动化、Quartz 单实例如实表述、Q5/Q6 问答对齐当前实现、演示故事线全部改为当前可演示步骤；文档头新增"实现状态速览"表，面试前先看那张表
 - [x] **行为学习一期**：起床延迟 SHRINK_V1 校准 + 响铃页晨间简报 + 出门打卡（2026-10-27，`87d3858`→`502f1a3` 共 5 提交，已推 origin/main）
   - 备注 1：后端单测 13/13 绿（WakeLatencyEstimatorTest 6 + DecisionEngineTest 7），Android assembleDebug 通过；端到端验证未跑 → 见上方第一节
   - 备注 2：校准触发点放在 DevicePlanController（事件事务提交**之后**）而非 DecisionService 的事务内——事务内调用 @Transactional 代理再捕获异常会标记 rollback-only，反而丢掉 DISMISSED 事件本身；详见 `87d3858` 提交说明
