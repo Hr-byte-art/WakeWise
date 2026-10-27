@@ -12,5 +12,9 @@ import java.time.ZoneId;
  */
 public interface ExplanationGenerator {
 
-    String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather);
+    /**
+     * llmEndpoint 为解析后的生效端点（用户级 BYOK ＞ 服务端默认，见 CredentialService）；
+     * null/不完整表示 LLM 未启用，LLM 实现回落确定性模板（模板实现忽略该参数）。
+     */
+    String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather, LlmEndpoint llmEndpoint);
 }

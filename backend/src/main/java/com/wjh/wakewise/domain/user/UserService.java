@@ -19,15 +19,18 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AmapClient amapClient;
+    private final CredentialService credentialService;
 
     public UserService(UserAccountRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
-                       AmapClient amapClient) {
+                       AmapClient amapClient,
+                       CredentialService credentialService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.amapClient = amapClient;
+        this.credentialService = credentialService;
     }
 
     @Transactional
@@ -70,7 +73,7 @@ public class UserService {
 
     /**
      * 更新常驻地址（家）：地址变更时顺带做地理编码落坐标缓存（best-effort，
-     * 未配 key/失败留空，估算链路会现查兜底）；空串清除地址与坐标。
+     * 凭据未启用/失败留空，估算链路会现查兜底）；空串清除地址与坐标。
      */
     @Transactional
     public AuthDtos.UserProfile updateHomeAddress(String userId, String homeAddress) {
@@ -82,8 +85,9 @@ public class UserService {
             return AuthDtos.UserProfile.from(user);
         }
         user.setHomeAddress(homeAddress.trim());
+        // 地理编码用用户生效凭据（BYOK ＞ 服务端默认）；凭据未启用时 geocode 返回 empty、坐标留空
         BigDecimal[] location = AmapClient.parseLocation(
-                amapClient.geocode(user.getHomeAddress()).orElse(null));
+                amapClient.geocode(user.getHomeAddress(), credentialService.amapFor(userId).key()).orElse(null));
         user.setHomeLng(location == null ? null : location[0]);
         user.setHomeLat(location == null ? null : location[1]);
         return AuthDtos.UserProfile.from(user);

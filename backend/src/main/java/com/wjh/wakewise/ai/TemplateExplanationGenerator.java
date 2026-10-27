@@ -19,7 +19,7 @@ public class TemplateExplanationGenerator implements ExplanationGenerator {
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
 
     @Override
-    public String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather) {
+    public String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather, LlmEndpoint llmEndpoint) {
         String baseline = plan.baselineWakeAt().atZone(zone).format(HHMM);
         String recommended = plan.recommendedWakeAt().atZone(zone).format(HHMM);
         String target = plan.targetArrivalAt().atZone(zone).format(HHMM);

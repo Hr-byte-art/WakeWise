@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.wjh.wakewise.domain.alarm.Alarm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -16,8 +15,9 @@ import java.util.Optional;
 
 /**
  * 高德 Web 服务客户端（地理编码 + 路径规划），镜像 OpenMeteoClient：
- * 紧超时、全异常 Optional.empty() 降级。key 未配置（wakewise.amap.key 留空）
- * 时整体不启用，估算链路回落用户手填通勤分钟。
+ * 紧超时、全异常 Optional.empty() 降级。key 按调用传入，来源由 CredentialService
+ * 解析（用户级 BYOK ＞ 服务端默认 wakewise.amap.key）；key 空白表示凭据未启用，
+ * 直接返回 empty，估算链路回落用户手填通勤分钟。
  *
  * 方式映射：WALK→v3 walking；DRIVE→v3 driving；BIKE→v4 bicycling；
  * TRANSIT/MIXED→v3 transit/integrated（MIXED 取公交复合方案，保守）；NONE 不查询。
@@ -32,23 +32,17 @@ public class AmapClient {
     private static final String BICYCLING_V4_URL = "https://restapi.amap.com/v4/direction/bicycling";
 
     private final RestClient restClient;
-    private final String key;
 
-    public AmapClient(@Value("${wakewise.amap.key:}") String key) {
-        this.key = key == null ? "" : key.trim();
+    public AmapClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(3000);
         factory.setReadTimeout(5000);
         this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
-    public boolean configured() {
-        return !key.isEmpty();
-    }
-
-    /** 地址文本 → "lng,lat"（首个结果）。 */
-    public Optional<String> geocode(String address) {
-        if (!configured() || address == null || address.isBlank()) {
+    /** 地址文本 → "lng,lat"（首个结果）；key 空白（凭据未启用）或地址无效返回 empty。 */
+    public Optional<String> geocode(String address, String key) {
+        if (key == null || key.isBlank() || address == null || address.isBlank()) {
             return Optional.empty();
         }
         try {
@@ -65,19 +59,19 @@ public class AmapClient {
         }
     }
 
-    /** 起终点（"lng,lat"）按方式的路径耗时（秒）。 */
+    /** 起终点（"lng,lat"）按方式的路径耗时（秒）；key 空白（凭据未启用）返回 empty。 */
     public Optional<Integer> routeDurationSeconds(String origin, String destination,
-                                                  Alarm.TravelMode mode, String city) {
-        if (!configured() || origin == null || destination == null || mode == null) {
+                                                  Alarm.TravelMode mode, String city, String key) {
+        if (key == null || key.isBlank() || origin == null || destination == null || mode == null) {
             return Optional.empty();
         }
         try {
             JsonNode root = switch (mode) {
-                case WALK -> getJson(DIRECTION_V3_URL + "walking", origin, destination, null);
-                case DRIVE -> getJson(DIRECTION_V3_URL + "driving", origin, destination, null);
+                case WALK -> getJson(DIRECTION_V3_URL + "walking", origin, destination, null, key);
+                case DRIVE -> getJson(DIRECTION_V3_URL + "driving", origin, destination, null, key);
                 case TRANSIT, MIXED -> getJson(DIRECTION_V3_URL + "transit/integrated",
-                        origin, destination, city);
-                case BIKE -> getBicyclingJson(origin, destination);
+                        origin, destination, city, key);
+                case BIKE -> getBicyclingJson(origin, destination, key);
                 case NONE -> null;
             };
             if (root == null) {
@@ -111,7 +105,7 @@ public class AmapClient {
         }
     }
 
-    private JsonNode getJson(String url, String origin, String destination, String city) {
+    private JsonNode getJson(String url, String origin, String destination, String city, String key) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url)
                 .queryParam("key", key)
                 .queryParam("origin", origin)
@@ -123,7 +117,7 @@ public class AmapClient {
         return restClient.get().uri(uri).retrieve().body(JsonNode.class);
     }
 
-    private JsonNode getBicyclingJson(String origin, String destination) {
+    private JsonNode getBicyclingJson(String origin, String destination, String key) {
         URI uri = UriComponentsBuilder.fromHttpUrl(BICYCLING_V4_URL)
                 .queryParam("key", key)
                 .queryParam("origin", origin)

@@ -10,6 +10,7 @@ import com.wjh.wakewise.domain.behavior.WakeLatencyEstimator;
 import com.wjh.wakewise.domain.decision.DecisionEngine;
 import com.wjh.wakewise.domain.decision.DecisionHistory;
 import com.wjh.wakewise.domain.decision.DecisionService;
+import com.wjh.wakewise.domain.user.CredentialService;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.travel.TravelEtaService;
 import com.wjh.wakewise.domain.travel.TravelTime;
@@ -38,6 +39,7 @@ public class MorningContextService {
     private final DecisionService decisionService;
     private final BehaviorLearningService behaviorLearningService;
     private final TravelEtaService travelEtaService;
+    private final CredentialService credentialService;
 
     public MorningContextService(AlarmRepository alarmRepository,
                                  AlarmRuleRepository ruleRepository,
@@ -46,7 +48,8 @@ public class MorningContextService {
                                  DecisionEngine engine,
                                  DecisionService decisionService,
                                  BehaviorLearningService behaviorLearningService,
-                                 TravelEtaService travelEtaService) {
+                                 TravelEtaService travelEtaService,
+                                 CredentialService credentialService) {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.userService = userService;
@@ -55,6 +58,7 @@ public class MorningContextService {
         this.decisionService = decisionService;
         this.behaviorLearningService = behaviorLearningService;
         this.travelEtaService = travelEtaService;
+        this.credentialService = credentialService;
     }
 
     public record WakePlanView(String wakeAt, String leaveBy, String arriveBy,
@@ -86,6 +90,8 @@ public class MorningContextService {
         UserAccount user = userService.requireUser(userId);
         ZoneId zone = ZoneId.of(user.getTimezone());
         DecisionEngine.BehavioralPriors priors = behaviorLearningService.priorsFor(userId);
+        // 高德生效凭据（BYOK 解析链）在整个闹钟循环内不变，循环前解析一次
+        CredentialService.AmapAccess amapAccess = credentialService.amapFor(userId);
         LocalDate target = requestedDate != null
                 ? requestedDate
                 : LocalDate.ofInstant(Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS), zone);
@@ -117,7 +123,7 @@ public class MorningContextService {
             if (alarm.getTargetType() == Alarm.AlarmType.ARRIVE_BY) {
                 Instant targetAt = target.atTime(alarm.getTargetLocalTime()).atZone(zone).toInstant();
                 DecisionHistory plan = decisionService.latestPlanFor(alarm.getId(), targetAt);
-                TravelTime travel = travelEtaService.estimate(user, alarm);
+                TravelTime travel = travelEtaService.estimate(user, alarm, amapAccess);
                 Instant wake = plan != null ? plan.getRecommendedAt()
                         : engine.baselineWakeAt(rule, targetAt, priors,
                                 travel.available() ? travel.durationMinutes() : null);

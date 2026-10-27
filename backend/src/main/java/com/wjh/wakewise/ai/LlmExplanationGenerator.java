@@ -35,13 +35,13 @@ public class LlmExplanationGenerator implements ExplanationGenerator {
     }
 
     @Override
-    public String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather) {
-        if (!client.configured()) {
-            return fallback.generate(plan, alarm, zone, weather);
+    public String generate(WakePlan plan, Alarm alarm, ZoneId zone, WeatherRisk weather, LlmEndpoint llmEndpoint) {
+        if (llmEndpoint == null || !llmEndpoint.complete()) {
+            return fallback.generate(plan, alarm, zone, weather, llmEndpoint);
         }
         String system = LlmPromptBuilder.systemPrompt(maxChars);
         String user = LlmPromptBuilder.facts(plan, alarm, zone, weather);
-        Optional<String> generated = client.chat(system, user)
+        Optional<String> generated = client.chat(system, user, llmEndpoint)
                 .map(this::sanitize)
                 .filter(s -> !s.isBlank());
         if (generated.isPresent()) {
@@ -49,7 +49,7 @@ public class LlmExplanationGenerator implements ExplanationGenerator {
             return generated.get();
         }
         log.info("LLM explanation unavailable, falling back to template: plan={}", plan.planId());
-        return fallback.generate(plan, alarm, zone, weather);
+        return fallback.generate(plan, alarm, zone, weather, llmEndpoint);
     }
 
     /** 净化：折叠空白、去常见 Markdown 记号，硬截断到落库列宽以内。 */

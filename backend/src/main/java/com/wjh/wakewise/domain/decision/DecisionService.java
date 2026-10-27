@@ -20,6 +20,7 @@ import com.wjh.wakewise.domain.history.WakeHistoryRepository;
 import com.wjh.wakewise.domain.notification.NotificationService;
 import com.wjh.wakewise.domain.travel.TravelEtaService;
 import com.wjh.wakewise.domain.travel.TravelTime;
+import com.wjh.wakewise.domain.user.CredentialService;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
 import com.wjh.wakewise.domain.weather.WeatherService;
@@ -55,6 +56,7 @@ public class DecisionService {
     private final BehaviorLearningService behaviorLearningService;
     private final WeatherService weatherService;
     private final TravelEtaService travelEtaService;
+    private final CredentialService credentialService;
     private final DecisionEngine engine;
     private final ExplanationGenerator explanationGenerator;
     private final NotificationService notificationService;
@@ -70,6 +72,7 @@ public class DecisionService {
                            BehaviorLearningService behaviorLearningService,
                            WeatherService weatherService,
                            TravelEtaService travelEtaService,
+                           CredentialService credentialService,
                            DecisionEngine engine,
                            ExplanationGenerator explanationGenerator,
                            NotificationService notificationService,
@@ -83,6 +86,7 @@ public class DecisionService {
         this.behaviorLearningService = behaviorLearningService;
         this.weatherService = weatherService;
         this.travelEtaService = travelEtaService;
+        this.credentialService = credentialService;
         this.engine = engine;
         this.explanationGenerator = explanationGenerator;
         this.notificationService = notificationService;
@@ -165,12 +169,15 @@ public class DecisionService {
         LocalDate targetDate = LocalDate.ofInstant(targetAt, zone);
 
         AlarmRule rule = requireRule(alarm.getId());
+        // 外部服务生效凭据（BYOK 解析链：禁用 ＞ 用户级 ＞ 服务端默认 ＞ 关闭；解析永不抛）
+        CredentialService.AmapAccess amapAccess = credentialService.amapFor(user.getId());
+        CredentialService.LlmAccess llmAccess = credentialService.llmFor(user.getId());
         WeatherRisk weather = weatherService.getMorningRisk(user, targetDate, zone);
         // 真实通勤 ETA（增强链路：不可用时引擎回落 rule 手填分钟，modelVersion 不带 +ETA）
-        TravelTime travel = travelEtaService.estimate(user, alarm);
+        TravelTime travel = travelEtaService.estimate(user, alarm, amapAccess);
         DecisionEngine.BehavioralPriors priors = behaviorLearningService.priorsFor(user.getId());
         WakePlan plan = engine.evaluate(alarm, rule, user, weather, targetAt, overrideMaxAdvance, priors, travel);
-        String explanation = explanationGenerator.generate(plan, alarm, zone, weather);
+        String explanation = explanationGenerator.generate(plan, alarm, zone, weather, llmAccess.endpoint());
         return new WakePlan(plan.planId(), plan.alarmId(), "PREVIEW",
                 plan.baselineWakeAt(), plan.recommendedWakeAt(), plan.deltaMinutes(), plan.targetArrivalAt(),
                 plan.lateProbabilityBefore(), plan.lateProbabilityAfter(), plan.riskScore(), plan.confidence(),

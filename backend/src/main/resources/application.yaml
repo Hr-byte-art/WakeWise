@@ -69,7 +69,12 @@ wakewise:
   amap:
     # 高德 Web 服务 key（lbs.amap.com 个人开发者注册，选"Web 服务"类型）；留空即不启用真实 ETA，
     # 通勤时长回落用户手填分钟。地址→坐标在建闹钟/设常驻地址时缓存，路径规划结果缓存 2 小时。
+    # 这里是服务端默认：用户在 App 设置页自带的 key（BYOK）优先于它，见 user_credential 表。
     key: ${AMAP_KEY:}
+  byok:
+    # 用户级外部服务凭据（BYOK）加密密钥：SHA-256 派生 AES-256-GCM key，加密 user_credential.secret_enc。
+    # 生产必须通过环境变量注入强随机值；换钥会使既有密文解密失败（自动回落服务端默认，用户重存即恢复）。
+    enc-key: ${BYOK_ENC_KEY:wakewise-dev-only-byok-enc-key-change-me}
 
 # API 文档(knife4j):http://localhost:8080/doc.html
 springdoc:

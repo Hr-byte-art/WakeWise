@@ -2,6 +2,7 @@ package com.wjh.wakewise.domain.travel;
 
 import com.wjh.wakewise.common.Ids;
 import com.wjh.wakewise.domain.alarm.Alarm;
+import com.wjh.wakewise.domain.user.CredentialService;
 import com.wjh.wakewise.domain.user.UserAccount;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +17,8 @@ import java.util.Optional;
 /**
  * 真实通勤估算编排（镜像 WeatherService 模式）：坐标解析 → 路径规划 → 2 小时快照缓存。
  *
+ * 高德 key 由调用方经 CredentialService 解析后传入（用户级 BYOK ＞ 服务端默认）；
+ * access 不可用（OFF/已禁用）时整体不查询，返回 unavailable。
  * 坐标来源：user/alarm 上的地理编码缓存列（建闹钟/设常驻地址时写入）；
  * 列为空时现查地理编码但不回写——估算可能在只读事务/持有行锁的事务里被调用，
  * 回写会踩 readOnly 不落库或自锁的坑，地址变更点的写入职责在 AlarmService/UserService。
@@ -37,17 +40,18 @@ public class TravelEtaService {
         this.repository = repository;
     }
 
-    public TravelTime estimate(UserAccount user, Alarm alarm) {
+    public TravelTime estimate(UserAccount user, Alarm alarm, CredentialService.AmapAccess access) {
         try {
-            if (!amapClient.configured()) {
+            if (access == null || !access.available()) {
                 return TravelTime.unavailable();
             }
+            String key = access.key();
             Alarm.TravelMode mode = alarm == null ? null : alarm.getTravelMode();
             if (mode == null || mode == Alarm.TravelMode.NONE) {
                 return TravelTime.unavailable();
             }
-            String origin = resolveOrigin(user);
-            String destination = resolveDestination(alarm);
+            String origin = resolveOrigin(user, key);
+            String destination = resolveDestination(alarm, key);
             if (origin == null || destination == null) {
                 return TravelTime.unavailable();
             }
@@ -61,7 +65,7 @@ public class TravelEtaService {
                 return new TravelTime(true, minutes, cached.get().getQualityScore().doubleValue());
             }
 
-            Optional<Integer> seconds = amapClient.routeDurationSeconds(origin, destination, mode, user.getCity());
+            Optional<Integer> seconds = amapClient.routeDurationSeconds(origin, destination, mode, user.getCity(), key);
             if (seconds.isEmpty()) {
                 return TravelTime.unavailable();
             }
@@ -89,18 +93,18 @@ public class TravelEtaService {
                 + new BigDecimal(parts[1].trim()).setScale(4, RoundingMode.HALF_UP);
     }
 
-    private String resolveOrigin(UserAccount user) {
+    private String resolveOrigin(UserAccount user, String key) {
         if (user.getHomeLng() != null && user.getHomeLat() != null) {
             return user.getHomeLng().toPlainString() + "," + user.getHomeLat().toPlainString();
         }
-        return amapClient.geocode(user.getHomeAddress()).orElse(null);
+        return amapClient.geocode(user.getHomeAddress(), key).orElse(null);
     }
 
-    private String resolveDestination(Alarm alarm) {
+    private String resolveDestination(Alarm alarm, String key) {
         if (alarm.getDestLng() != null && alarm.getDestLat() != null) {
             return alarm.getDestLng().toPlainString() + "," + alarm.getDestLat().toPlainString();
         }
-        return amapClient.geocode(alarm.getDestinationLabel()).orElse(null);
+        return amapClient.geocode(alarm.getDestinationLabel(), key).orElse(null);
     }
 
     /** 快照写入是 best-effort：在只读调用方事务里可能不落库，仅损失缓存、不影响本次结果。 */
