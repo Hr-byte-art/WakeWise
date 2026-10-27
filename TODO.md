@@ -23,14 +23,16 @@
 - [ ] **时钟修复**：响铃页停留跨过整分钟，时钟应跳分钟
 - [ ] **出门打卡闭环**：点"关闭"→ 通知栏出"出门打卡"→ 点【我出门了】→ 通知消失 + 后端 `left_home_at` 有值（planId 需真实，否则归属校验不过）
 - [ ] **首页校准提示**：校准生效后首页显示"已根据最近 6 次起床记录校准"
+- [ ] **日历导入**（`8af9d61` 一期实装）：系统日历建明日 09:30 非全天事件（带地点）→ 新建闹钟点"从日历导入"→ 时间/名称/地点自动填 + Toast；明日无日程、拒绝 READ_CALENDAR 权限、日历里全是全天节假日事件三条降级路径均只提示不阻塞
 
 ## 二、待做：后续功能（按优先级）
 
 - [x] **LLM 解释生成**：OpenAI 兼容轻量客户端接入现有 `ExplanationGenerator` 接口（base-url/api-key/model 用户可配，留空纯模板），模板兜底。红线：LLM 只写文案不算时间（2026-10-27，`5283be5`，测试 28/28 绿；真 key 冒烟——配 `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 起 evaluate 看 LLM 文案、错 key 看回落——待有 key 时顺手跑）
 - [ ] **真实交通 ETA**：高德 Web 服务 API（免费额度够 demo 用），决策引擎已预留口子
-- [ ] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）
+- [x] **日历接入**：Android `CalendarProvider` 读次日首个事件，自动填"目标到达"时间（纯端侧，无后端改动，三条里最便宜）（2026-10-27，`8af9d61`，assembleDebug 通过；运行时验证见第一节"日历导入"）
 - [ ] **准备时长校准**：消费已积累的 `left_home_at` 样本（攒够 ≥5 条后实施），替换固定 PREP_P90_FACTOR；一期只埋点未消费
 - [ ] **eventId 服务端全局去重**：当前只有字段级幂等（ALARM_SNOOZED 重复上报会多计贪睡次数），详见 API 设计 5.3
+- [ ] **LLM 用户级配置（App 设置页）**：新表存 per-user base-url/api-key/model（api_key 加密、接口只写不回显），`LlmChatClient` 按 userId 解析（用户级 > 服务端默认 > 纯模板），Android 设置页三输入框；`ExplanationGenerator.generate` 需加 userId 参数（调用点仅 DecisionService.compute 一处）
 - [ ] **客户端时钟偏差治理**：occurredAt 信任设备时钟，README 诚实清单已提
 - [ ] ~~不做（明确排除）~~：iOS、FCM 推送（国内不可靠且轮询+ACK 已够用）、多设备协同——避免误起炉灶
 
