@@ -53,6 +53,19 @@ wakewise:
     shrinkage-k: 5
     max-samples: 30          # 需 <= 50（Repository 固定取最近 50 条）
     max-latency-minutes: 60  # 单条样本截断上限（开着闹钟人不在等病态样本）
+  llm:
+    # 解释文案 LLM 增强（OpenAI 兼容端点，用户可配；base-url/api-key/model 留空即不启用，纯模板文案）
+    # base-url 给到 /v1 为止，常用示例：
+    #   DeepSeek  https://api.deepseek.com/v1                        model: deepseek-chat
+    #   OpenAI    https://api.openai.com/v1                          model: gpt-4o-mini
+    #   通义      https://dashscope.aliyuncs.com/compatible-mode/v1  model: qwen-plus
+    #   Kimi      https://api.moonshot.cn/v1                         model: moonshot-v1-8k
+    base-url: ${LLM_BASE_URL:}
+    api-key: ${LLM_API_KEY:}
+    model: ${LLM_MODEL:}
+    connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${LLM_READ_TIMEOUT_MS:5000}
+    max-chars: ${LLM_MAX_CHARS:300}
 
 # API 文档(knife4j):http://localhost:8080/doc.html
 springdoc:

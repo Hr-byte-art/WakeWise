@@ -10,22 +10,23 @@
 | 关键任务可靠性（ACK 状态机、outbox 补报、开机重排、离线兜底） | ✅ 已实现 | 新计划未 ACK 旧计划不下线 |
 | 行为学习 | ✅ 一期已实现 | 起床延迟 SHRINK_V1 收缩估计（≥5 样本生效）；出门事件（USER_LEFT_HOME）埋点积累中；准备/通勤校准、时间衰减、影子评估为规划 |
 | 晨间简报（API + 响铃页展示 + 离线缓存兜底） | ✅ 已实现 | 出门打卡通知一并落地 |
+| LLM 解释生成（OpenAI 兼容端点可配，模板兜底） | ✅ 已实现 | 自研轻量 RestClient 客户端（非 Spring AI，见 Q3）；三项环境变量留空即纯模板零感知；红线：LLM 只改写文案不算时间 |
 | Morning Agent | ⚠️ 部分 | 当前为 Quartz 夜间任务（22:00）+ 自动布防边界判定；无 Spring AI、无工具调用 |
-| 技术栈 | ⚠️ 如实表述 | Java 21 + Spring Boot + MySQL(Flyway) + JWT + Quartz + **原生 Android**(Java/Room/WorkManager)；Spring AI、Redis、RabbitMQ、Docker 为规划 |
+| 技术栈 | ⚠️ 如实表述 | Java 21 + Spring Boot + MySQL(Flyway) + JWT + Quartz + OpenAI 兼容 LLM 端点（解释文案）+ **原生 Android**(Java/Room/WorkManager)；Spring AI、Redis、RabbitMQ、Docker 为规划 |
 | 交通 ETA API、日历接入、MCP 工具沙箱、自然语言提案 | ❌ 规划 | 决策引擎与解释层均已留端口 |
 
 本文第 2、4 节部分段落按“设计终态”撰写，与当前代码的差异处均以（规划）/（已实现）就地标注。
 
 ## 1. 一句话项目描述
 
-**WakeWise（知晨）— AI Morning Assistant：**面向天气与个人行为动态变化设计智能晨间决策系统，基于 Java 21、Spring Boot、MySQL、Quartz 与原生 Android 构建夜间 Morning Agent（Spring AI、Redis、RabbitMQ 为下一阶段规划），通过风险约束优化和用户行为学习生成可解释的最佳唤醒计划，并以端侧本地闹钟、计划 ACK 和降级策略保证关键任务可靠执行。
+**WakeWise（知晨）— AI Morning Assistant：**面向天气与个人行为动态变化设计智能晨间决策系统，基于 Java 21、Spring Boot、MySQL、Quartz 与原生 Android 构建夜间 Morning Agent（LLM 解释文案已接 OpenAI 兼容端点、Spring AI、Redis、RabbitMQ 为下一阶段规划），通过风险约束优化和用户行为学习生成可解释的最佳唤醒计划，并以端侧本地闹钟、计划 ACK 和降级策略保证关键任务可靠执行。
 
 ## 2. 简历项目描述
 
 ### 版本 A：架构/后端方向
 
 **WakeWise（知晨）｜AI Morning Assistant｜[项目负责人/后端开发]**  
-`Java 21` `Spring Boot` `MySQL/Flyway` `Quartz` `JWT` `原生Android(Java)` `Room` `WorkManager`（`Spring AI` `Redis` `RabbitMQ` 规划中）
+`Java 21` `Spring Boot` `MySQL/Flyway` `Quartz` `JWT` `OpenAI兼容LLM` `原生Android(Java)` `Room` `WorkManager`（`Spring AI` `Redis` `RabbitMQ` 规划中）
 
 - 设计面向晨间目标的 AI 决策系统，融合天气与用户行为数据（交通 ETA、日历接入为规划），将固定闹钟升级为可解释、可撤销的动态唤醒计划。
 - 构建夜间 Morning Agent 任务链路（Quartz，22:00）：上下文采集 → 风险评估 → 自动布防边界判定 → 计划下发（pending/ACK）→ 通知与执行事件回流；全程带 traceId 与 modelVersion 审计，大模型不参与时间计算，从架构上隔离幻觉风险（工具 Schema、权限沙箱为 MCP 扩展规划）。
@@ -37,7 +38,7 @@
 
 **WakeWise（知晨）｜可解释 Morning Agent｜[AI 应用开发]**
 
-- 设计受策略约束的 Morning Agent（Spring AI 接入为下一阶段，当前解释层为模板实现、端口已预留），目标是将天气、交通、日历和行为画像封装为结构化工具，实现夜间自主规划、二次复核与晨间简报。
+- 设计受策略约束的 Morning Agent（LLM 解释已通过自研 OpenAI 兼容客户端实装、失败回落模板；Spring AI 框架接入为下一阶段），目标是将天气、交通、日历和行为画像封装为结构化工具，实现夜间自主规划、二次复核与晨间简报。
 - 将 LLM 限制在意图理解、工具编排和自然语言解释层，核心时间由确定性风险模型计算；解释结果绑定事实来源、模型版本和置信度，降低幻觉对关键动作的影响。
 - 设计个体行为学习闭环，以起床延迟（已实装：SHRINK_V1 收缩估计 + 异常截断 + 冷启动先验）、准备时长（出门事件积累中）和用户反馈为监督信号，逐步校准个人模型；时间衰减、影子评估为规划。
 - 预留 MCP-ready 工具注册与权限沙箱，使日历、出行、健康、智能家居等外部 Agent 能在最小授权范围内扩展。
@@ -50,7 +51,7 @@
 
 系统会在夜间由 Morning Agent 汇总次日天气与用户历史行为，路线 ETA 与日历接入在规划中。核心算法不使用“下雨提前十分钟”这种简单规则，而是分别估计起床延迟、准备时间和通勤时间的概率分布，再根据事件重要性选择相应分位数，并在用户设置的最大提前、最大延后范围内，最小化迟到成本、睡眠损失和计划变化成本。
 
-架构上，我刻意没有让大模型直接修改闹钟。解释文本由模板引擎生成、只引用计划事实（Spring AI 接入规划中，`ExplanationGenerator` 端口已预留）；确定性决策引擎输出结构化 WakePlan，边界判定检查置信度与最大调整范围，最终由原生 Android 客户端（AlarmManager 精确闹钟 + Room 离线缓存 + outbox 事件补报）写入系统本地闹钟。只有设备返回 ACK，新计划才算生效；如果网络、天气 API 失败，旧闹钟仍然保留。
+架构上，我刻意没有让大模型直接修改闹钟。解释文本默认由模板引擎生成、只引用计划事实；配置 OpenAI 兼容端点（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`，DeepSeek/通义/Kimi/OpenAI 均可）后由 LLM 改写——提示词只含引擎算好的事实并明令禁止编造时间，失败即时回落模板，Spring AI 框架接入为可选演进。确定性决策引擎输出结构化 WakePlan，边界判定检查置信度与最大调整范围，最终由原生 Android 客户端（AlarmManager 精确闹钟 + Room 离线缓存 + outbox 事件补报）写入系统本地闹钟。只有设备返回 ACK，新计划才算生效；如果网络、天气 API 失败，旧闹钟仍然保留。
 
 这个项目的亮点不是简单接入 LLM，而是把 Agent、可解释决策、行为学习和关键任务可靠性组合成了一个完整闭环。长期目标是扩展到手表、智能家居和车辆，形成 Morning OS。
 
@@ -86,7 +87,7 @@ WakeWise 把晨间过程拆成三个随机变量：从响铃到离床的时间�
 
 Morning Agent 当前实现为 Quartz 夜间任务（22:00，幂等：同目标日旧 PROPOSED 计划自动作废）：采集天气与行为先验，构建评估上下文，调用决策引擎生成 WakePlan，再经自动布防判定检查置信度、调整方向与最大提前范围。“有状态、可恢复、多工具编排”的完整 Agent 形态为下一阶段（规划）。
 
-这里有一个重要设计：大模型不直接决定最终时间。解释生成当前为模板实现（只引用决策记录中的事实，不能自己编造“明天会堵车”），Spring AI 负责自然语言意图与工具选择属接入规划；关键时间始终来自确定性的预测与约束模块。
+这里有一个重要设计：大模型不直接决定最终时间。解释生成已接 OpenAI 兼容 LLM 端点（用户可配，默认关闭即纯模板；提示词只含决策记录中的事实，不能自己编造“明天会堵车”，失败回落模板）；Spring AI 负责自然语言意图与工具选择属接入规划；关键时间始终来自确定性的预测与约束模块。
 
 对于未来的 MCP 扩展，每个工具都声明输入输出 Schema、权限范围、超时和幂等策略，外部内容一律当作不可信数据，不能变成系统指令。
 
@@ -118,7 +119,7 @@ LLM 的输出具有随机性，也可能受提示注入或错误上下文影响�
 
 ### Q3：为什么同时提 Spring AI 和 LangChain4j？
 
-生产基线选择 Spring AI——但接入是下一阶段工作：当前解释层是模板实现，通过 `ExplanationGenerator` 应用层端口保留替换能力。LangChain4j 作为 Java AI 生态的备选和实验对照，不在 MVP 同时承载同一条链路，避免双框架复杂度。
+生产基线选择 Spring AI——接入属下一阶段：当前解释层已通过自研 OpenAI 兼容轻量客户端接入 LLM（Boot 3.3 钉版不升，Spring AI 1.0 官方仅支持 3.4+），模板兜底，`ExplanationGenerator` 应用层端口保留随时替换为 Spring AI 的能力。LangChain4j 作为 Java AI 生态的备选和实验对照，不在 MVP 同时承载同一条链路，避免双框架复杂度。
 
 ### Q4：Quartz 会不会在多实例中重复执行？
 

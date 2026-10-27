@@ -3,15 +3,17 @@ package com.wjh.wakewise.ai;
 import com.wjh.wakewise.domain.alarm.Alarm;
 import com.wjh.wakewise.domain.decision.WakePlan;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
-import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 
-/** 确定性模板解释：只引用计划中的事实（时间、因素、置信度），不引入外部内容。 */
-@Component
+/**
+ * 确定性模板解释：只引用计划中的事实（时间、因素、置信度），不引入外部内容。
+ * 同时是 LLM 链路的兜底实现——LlmExplanationGenerator 未配置/失败时回落到这里
+ * （非 Spring Bean，由调用方直接构造，保证兜底零依赖零故障面）。
+ */
 public class TemplateExplanationGenerator implements ExplanationGenerator {
 
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");

@@ -14,7 +14,7 @@ WakeWise 不是一个"根据天气提前几分钟"的闹钟，而是一套晨间
 | 客户端 | **原生 Android（Java 17 + XML + ViewBinding）** | 精确闹钟、全屏响铃、开机重排、离线兜底 |
 | 后端 | **Spring Boot 3.3 + Java 21**（模块化单体） | 决策引擎、可靠性链路、Quartz 夜间任务 |
 | 存储 | MySQL 8（Flyway 迁移） | 事务与审计数据 |
-| 外部数据 | Open-Meteo（天气，免 Key） | 失败自动降级 |
+| 外部数据 | Open-Meteo（天气，免 Key）；LLM 文案（OpenAI 兼容端点，可选、用户自配） | 失败自动降级 |
 | 认证 | JWT（Spring Security） | MVP 简化实现 |
 
 > 注：这是**推倒重写**后的版本。旧版（Flutter + Spring Boot）代码仍在 git 历史 `5a510ed` 中可查。
@@ -29,7 +29,7 @@ WakeWise/
 │       ├── common/          # 统一响应、错误码、异常处理
 │       ├── config/          # Security / JWT
 │       ├── agent/           # Quartz 夜间计划任务（默认 22:00）
-│       ├── ai/              # 解释生成端口（模板实现，可换 Spring AI）
+│       ├── ai/              # 解释生成端口（OpenAI 兼容 LLM 改写 + 确定性模板兜底）
 │       └── domain/
 │           ├── user/        # 注册/登录
 │           ├── alarm/       # 闹钟 CRUD + 规则
@@ -67,6 +67,16 @@ MYSQL_USER=root MYSQL_PASSWORD=你的密码 mvn spring-boot:run
 - 数据库默认名 `wakewise`，首次启动自动建库并执行 Flyway 迁移（`createDatabaseIfNotExist=true`）。
 - ⚠️ 如果本机存在**旧版实现留下的 `wakewise` 库**，新旧 schema 冲突会导致启动失败。请先 `DROP DATABASE wakewise;`，或用 `MYSQL_DB=wakewise_v2` 指定新库名。
 - JWT 密钥、端口、夜间任务 cron 见 `application.yaml`，均可通过环境变量覆盖（`JWT_SECRET`、`SERVER_PORT`、`WAKEWISE_NIGHTLY_PLAN_CRON`）。
+- **LLM 解释文案（可选，默认关闭）**：三个环境变量 `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 配置任意 OpenAI 兼容端点，未配置时使用确定性模板文案（行为与旧版一致）。常用 base-url（给到 `/v1` 为止）：
+
+  | 服务商 | base-url | model 示例 |
+  |---|---|---|
+  | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
+  | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+  | 通义千问 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` |
+  | Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
+
+  红线：LLM 只做文案改写（提示词只含引擎算好的事实，禁止编造/推算时间），失败/超时/空白输出一律即时回落模板——AI 可以失败，闹钟不能。
 
 ### Android 客户端
 
@@ -87,7 +97,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 - 起床延迟 P50/P90 支持按用户历史校准：从 `wake_history` 真实样本（dismissedAt − triggeredAt）算经验分位数并与全局先验收缩混合（SHRINK_V1）；样本不足 5 条时保持固定先验，冷启动行为与旧版一致，校准参与决策时 modelVersion 标注 `QUANTILE_V1+CAL(n=N)`。
 - 硬约束：调整必须落在 `[基准−最大提前, 基准+最大延后]` 内，且不晚于目标前 15 分钟；延后需用户显式授权。
 - 平静期规则：无外部风险信号且提前量不足 10 分钟时不折腾，保持原计划（计划变化成本）。
-- 迟到概率用正态 CDF 闭式计算；输出带因素归因（通勤波动余量 / 降水增量 / 安全余量），解释文本只引用计划事实，LLM 不参与时间计算。
+- 迟到概率用正态 CDF 闭式计算；输出带因素归因（通勤波动余量 / 降水增量 / 安全余量）。解释文案默认确定性模板，配置 LLM 后由模型改写——但提示词只含引擎算好的事实且明令禁止编造时间，LLM 不参与时间计算，失败即时回落模板。
 
 ### 可靠性链路（AI 可以失败，闹钟不能）
 
@@ -128,7 +138,8 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 - iOS：客户端为原生 Android，暂无 iOS 版本（旧 Flutter 端可从 git 历史恢复参考）。
 - 交通 ETA：MVP 使用用户设置的通勤估计 + 天气修正，未接地图 API（决策引擎预留了口子）。
 - 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备/通勤时长仍用用户设置值；出门事件（USER_LEFT_HOME）仅积累数据、暂不参与决策；`occurredAt` 信任客户端时钟，偏差治理留待后续。
-- 日历接入、推送（FCM）、LLM 解释（Spring AI）为下一阶段工作。
+- LLM 解释文案：已实装 OpenAI 兼容可配置客户端（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 三项留空即纯模板、零感知）；自研轻量 RestClient 客户端而非 Spring AI（Spring AI 1.0 官方仅支持 Boot 3.4+，本项目钉在 Boot 3.3，接口留有替换位）。
+- 日历接入、推送（FCM）为下一阶段工作。
 - `application.yaml` 的 JWT 密钥是开发默认值，生产必须通过环境变量注入强随机密钥。
 
 ## 历史版本
