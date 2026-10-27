@@ -32,6 +32,15 @@ public class DecisionEngine {
     public static final double WAKE_LATENCY_P50_MIN = 4.0;
     public static final double WAKE_LATENCY_P90_MIN = 8.0;
 
+    /**
+     * 个人行为先验：起床延迟 P50/P90（分钟）与校准样本数（0 即未校准，用固定先验）。
+     * 由 BehaviorLearningService 从 wake_history 真实样本校准后注入。
+     */
+    public record BehavioralPriors(double wakeLatencyP50Min, double wakeLatencyP90Min, int sampleCount) {
+        public static final BehavioralPriors DEFAULTS =
+                new BehavioralPriors(WAKE_LATENCY_P50_MIN, WAKE_LATENCY_P90_MIN, 0);
+    }
+
     private static final double PREP_P90_FACTOR = 1.25;
     private static final double Z_60 = 0.2533;
     private static final double Z_75 = 0.6745;
@@ -65,14 +74,20 @@ public class DecisionEngine {
 
     public WakePlan evaluate(Alarm alarm, AlarmRule rule, UserAccount user, WeatherRisk weather,
                              Instant targetArrivalAt, Integer overrideMaxAdvance) {
+        return evaluate(alarm, rule, user, weather, targetArrivalAt, overrideMaxAdvance,
+                BehavioralPriors.DEFAULTS);
+    }
+
+    public WakePlan evaluate(Alarm alarm, AlarmRule rule, UserAccount user, WeatherRisk weather,
+                             Instant targetArrivalAt, Integer overrideMaxAdvance, BehavioralPriors priors) {
         boolean conservative = user.getRiskPreference() == UserAccount.RiskPreference.CONSERVATIVE;
         boolean sleepFirst = user.getRiskPreference() == UserAccount.RiskPreference.SLEEP_FIRST;
         double z = conservative ? Z_90 : sleepFirst ? Z_60 : Z_75;
         double safetyBuffer = conservative ? bufferConservative : sleepFirst ? bufferSleepFirst : bufferBalanced;
 
         // 1. 各阶段耗时的分位数（正态近似，sigma 由 p50/p90 推出）
-        double wakeSigma = (WAKE_LATENCY_P90_MIN - WAKE_LATENCY_P50_MIN) / NORMAL_P90_Z;
-        double wakeQuantile = WAKE_LATENCY_P50_MIN + z * wakeSigma;
+        double wakeSigma = (priors.wakeLatencyP90Min() - priors.wakeLatencyP50Min()) / NORMAL_P90_Z;
+        double wakeQuantile = priors.wakeLatencyP50Min() + z * wakeSigma;
 
         double prepP50 = Math.max(0, rule.getPrepDurationMin());
         double prepSigma = prepP50 * (PREP_P90_FACTOR - 1.0) / NORMAL_P90_Z;
@@ -89,7 +104,7 @@ public class DecisionEngine {
         double travelQuantile = travelP50 + z * travelSigma;
 
         // 2. 基准唤醒（用户凭 p50 经验会设的时间）与理想唤醒（分位数 + 安全余量）
-        double requiredMean = WAKE_LATENCY_P50_MIN + prepP50 + travelP50;
+        double requiredMean = priors.wakeLatencyP50Min() + prepP50 + travelP50;
         double requiredSigma = Math.sqrt(wakeSigma * wakeSigma + prepSigma * prepSigma + travelSigma * travelSigma);
         double requiredQuantile = wakeQuantile + prepQuantile + travelQuantile;
 
@@ -141,7 +156,7 @@ public class DecisionEngine {
                     (int) Math.round(travelBaseP90 - travelP50), "通勤时长波动余量"));
         }
         factors.add(new WakePlan.Factor("WAKE_LATENCY_MARGIN",
-                (int) Math.round(wakeQuantile - WAKE_LATENCY_P50_MIN), "起床延迟余量"));
+                (int) Math.round(wakeQuantile - priors.wakeLatencyP50Min()), "起床延迟余量"));
         factors.add(new WakePlan.Factor("SAFETY_BUFFER", (int) safetyBuffer, "安全余量"));
         factors.sort(Comparator.comparingInt(WakePlan.Factor::impactMinutes).reversed());
         factors = factors.stream().filter(f -> f.impactMinutes() > 0).limit(3).toList();
@@ -162,23 +177,34 @@ public class DecisionEngine {
             reasonCode = "SLEEP_PRESERVED";
         }
 
+        String modelVersion = priors.sampleCount() > 0
+                ? MODEL_VERSION + "+CAL(n=" + priors.sampleCount() + ")"
+                : MODEL_VERSION;
         return new WakePlan(null, alarm.getId(), null,
                 baselineWakeAt, recommended, (int) deltaMinutes, targetArrivalAt,
                 lateProbabilityBefore, lateProbabilityAfter, riskScore, confidence,
-                factors, reasonCode, null, false, MODEL_VERSION);
+                factors, reasonCode, null, false, modelVersion);
     }
 
     /** 用户凭 p50 经验会设置的基准唤醒时间（MorningContext 与测试使用）。 */
     public Instant baselineWakeAt(AlarmRule rule, Instant targetArrivalAt) {
-        double requiredMean = WAKE_LATENCY_P50_MIN + Math.max(0, rule.getPrepDurationMin())
+        return baselineWakeAt(rule, targetArrivalAt, BehavioralPriors.DEFAULTS);
+    }
+
+    public Instant baselineWakeAt(AlarmRule rule, Instant targetArrivalAt, BehavioralPriors priors) {
+        double requiredMean = priors.wakeLatencyP50Min() + Math.max(0, rule.getPrepDurationMin())
                 + Math.max(0, rule.getCommuteMinutes());
         return targetArrivalAt.minus((long) Math.ceil(requiredMean), ChronoUnit.MINUTES);
     }
 
     /** 建议出门时间：推荐唤醒 + 起床延迟 P90 + 准备时长 P50。 */
     public Instant leaveBy(AlarmRule rule, Instant recommendedWakeAt) {
+        return leaveBy(rule, recommendedWakeAt, BehavioralPriors.DEFAULTS);
+    }
+
+    public Instant leaveBy(AlarmRule rule, Instant recommendedWakeAt, BehavioralPriors priors) {
         double prepP50 = Math.max(0, rule.getPrepDurationMin());
-        long minutes = (long) Math.ceil(WAKE_LATENCY_P90_MIN + prepP50);
+        long minutes = (long) Math.ceil(priors.wakeLatencyP90Min() + prepP50);
         return recommendedWakeAt.plus(minutes, ChronoUnit.MINUTES);
     }
 

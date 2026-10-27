@@ -5,6 +5,8 @@ import com.wjh.wakewise.domain.alarm.AlarmRepository;
 import com.wjh.wakewise.domain.alarm.AlarmRule;
 import com.wjh.wakewise.domain.alarm.AlarmRuleRepository;
 import com.wjh.wakewise.domain.alarm.Recurrence;
+import com.wjh.wakewise.domain.behavior.BehaviorLearningService;
+import com.wjh.wakewise.domain.behavior.WakeLatencyEstimator;
 import com.wjh.wakewise.domain.decision.DecisionEngine;
 import com.wjh.wakewise.domain.decision.DecisionHistory;
 import com.wjh.wakewise.domain.decision.DecisionService;
@@ -32,19 +34,22 @@ public class MorningContextService {
     private final WeatherService weatherService;
     private final DecisionEngine engine;
     private final DecisionService decisionService;
+    private final BehaviorLearningService behaviorLearningService;
 
     public MorningContextService(AlarmRepository alarmRepository,
                                  AlarmRuleRepository ruleRepository,
                                  UserService userService,
                                  WeatherService weatherService,
                                  DecisionEngine engine,
-                                 DecisionService decisionService) {
+                                 DecisionService decisionService,
+                                 BehaviorLearningService behaviorLearningService) {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.userService = userService;
         this.weatherService = weatherService;
         this.engine = engine;
         this.decisionService = decisionService;
+        this.behaviorLearningService = behaviorLearningService;
     }
 
     public record WakePlanView(String wakeAt, String leaveBy, String arriveBy,
@@ -61,14 +66,20 @@ public class MorningContextService {
     public record EventView(String title, String startAt, String locationLabel) {
     }
 
+    /** 校准信息：null 表示尚未校准（样本不足或无记录）。 */
+    public record CalibrationView(Integer sampleCount, Double estimateMinutes, String algorithmVersion) {
+    }
+
     public record MorningContextView(String date, WakePlanView wakePlan, WeatherView weather,
-                                     TrafficView traffic, EventView firstEvent, String updatedAt) {
+                                     TrafficView traffic, EventView firstEvent, String updatedAt,
+                                     CalibrationView calibration) {
     }
 
     @Transactional(readOnly = true)
     public MorningContextView forUser(String userId, LocalDate requestedDate) {
         UserAccount user = userService.requireUser(userId);
         ZoneId zone = ZoneId.of(user.getTimezone());
+        DecisionEngine.BehavioralPriors priors = behaviorLearningService.priorsFor(userId);
         LocalDate target = requestedDate != null
                 ? requestedDate
                 : LocalDate.ofInstant(Instant.now().plus(1, java.time.temporal.ChronoUnit.DAYS), zone);
@@ -99,10 +110,10 @@ public class MorningContextService {
             if (alarm.getTargetType() == Alarm.AlarmType.ARRIVE_BY) {
                 Instant targetAt = target.atTime(alarm.getTargetLocalTime()).atZone(zone).toInstant();
                 DecisionHistory plan = decisionService.latestPlanFor(alarm.getId(), targetAt);
-                Instant wake = plan != null ? plan.getRecommendedAt() : engine.baselineWakeAt(rule, targetAt);
+                Instant wake = plan != null ? plan.getRecommendedAt() : engine.baselineWakeAt(rule, targetAt, priors);
                 if (bestWake == null || wake.isBefore(bestWake)) {
                     bestWake = wake;
-                    bestLeave = engine.leaveBy(rule, wake);
+                    bestLeave = engine.leaveBy(rule, wake, priors);
                     bestArrive = targetAt;
                     bestPlanId = plan == null ? null : plan.getPlanId();
                     bestDelta = plan == null ? null : plan.getDeltaMinutes();
@@ -161,6 +172,8 @@ public class MorningContextService {
                         etaP50 == 0 ? null : (weather.heavy() || weather.moderate() ? "SLOWER_THAN_USUAL" : "NORMAL")),
                 eventTitle == null ? null : new EventView(eventTitle,
                         eventStart == null ? null : eventStart.toString(), eventLocation),
-                Instant.now().toString());
+                Instant.now().toString(),
+                priors.sampleCount() > 0 ? new CalibrationView(priors.sampleCount(),
+                        priors.wakeLatencyP50Min(), WakeLatencyEstimator.ALGORITHM_VERSION) : null);
     }
 }

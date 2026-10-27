@@ -47,6 +47,12 @@ wakewise:
     safety-buffer-minutes-conservative: 8
     safety-buffer-minutes-sleep-first: 3
     auto-arm-max-advance-minutes: 30
+  behavior:
+    # 起床延迟校准（SHRINK_V1）：样本不足 min-samples 时保持固定先验 4/8 分钟
+    min-samples: 5
+    shrinkage-k: 5
+    max-samples: 30          # 需 <= 50（Repository 固定取最近 50 条）
+    max-latency-minutes: 60  # 单条样本截断上限（开着闹钟人不在等病态样本）
 
 # API 文档(knife4j):http://localhost:8080/doc.html
 springdoc:

@@ -2,6 +2,9 @@ package com.wjh.wakewise.domain.decision;
 
 import com.wjh.wakewise.common.ApiResponse;
 import com.wjh.wakewise.common.AuthContext;
+import com.wjh.wakewise.domain.behavior.BehaviorLearningService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,10 +18,15 @@ import java.util.List;
 @RequestMapping("/api/v1")
 public class DevicePlanController {
 
-    private final DecisionService decisionService;
+    private static final Logger log = LoggerFactory.getLogger(DevicePlanController.class);
 
-    public DevicePlanController(DecisionService decisionService) {
+    private final DecisionService decisionService;
+    private final BehaviorLearningService behaviorLearningService;
+
+    public DevicePlanController(DecisionService decisionService,
+                                BehaviorLearningService behaviorLearningService) {
         this.decisionService = decisionService;
+        this.behaviorLearningService = behaviorLearningService;
     }
 
     @GetMapping("/device-plans/pending")
@@ -34,7 +42,17 @@ public class DevicePlanController {
 
     @PostMapping("/device-events")
     public ApiResponse<Void> recordEvent(@RequestBody DecisionDtos.DeviceEventRequest request) {
-        decisionService.recordDeviceEvent(AuthContext.currentUserId(), request);
+        String userId = AuthContext.currentUserId();
+        decisionService.recordDeviceEvent(userId, request);
+        // 关闭事件落库后重算起床延迟校准。放在事件事务提交之后触发：
+        // 校准是增强链路，失败只记日志，绝不把已提交的事件拖回滚（"AI 可以失败，闹钟不能"）。
+        if ("ALARM_DISMISSED".equals(request.type())) {
+            try {
+                behaviorLearningService.recalibrateWakeLatency(userId);
+            } catch (Exception e) {
+                log.warn("Wake latency recalibration failed after dismiss: user={}", userId, e);
+            }
+        }
         return ApiResponse.ok();
     }
 }

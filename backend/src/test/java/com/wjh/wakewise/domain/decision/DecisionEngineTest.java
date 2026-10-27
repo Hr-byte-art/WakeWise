@@ -108,4 +108,45 @@ class DecisionEngineTest {
         WakePlan balanced = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null);
         assertThat(plan.recommendedWakeAt()).isBeforeOrEqualTo(balanced.recommendedWakeAt());
     }
+
+    // ------------------------------------------------------------------ 行为先验校准
+
+    @Test
+    void calibratedPriorsShiftBaseline() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        AlarmRule rule = rule(40);
+        DecisionEngine.BehavioralPriors slowUser = new DecisionEngine.BehavioralPriors(10, 16, 12);
+
+        // 慢起用户（P50=10）的基准唤醒应比默认（P50=4）早 6 分钟
+        Instant defaultBaseline = engine.baselineWakeAt(rule, target);
+        Instant slowBaseline = engine.baselineWakeAt(rule, target, slowUser);
+        assertThat(ChronoUnit.MINUTES.between(slowBaseline, defaultBaseline)).isEqualTo(6);
+
+        // 需要更多起床时间的用户，推荐唤醒不应比默认更晚
+        WakePlan defaultPlan = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null);
+        WakePlan slowPlan = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null, slowUser);
+        assertThat(slowPlan.recommendedWakeAt()).isBeforeOrEqualTo(defaultPlan.recommendedWakeAt());
+    }
+
+    @Test
+    void modelVersionAnnotatesCalibration() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        WakePlan calibrated = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 12));
+        WakePlan defaults = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null);
+
+        assertThat(calibrated.modelVersion()).isEqualTo("QUANTILE_V1+CAL(n=12)");
+        assertThat(defaults.modelVersion()).isEqualTo("QUANTILE_V1");
+    }
+
+    @Test
+    void leaveByUsesCalibratedPriors() {
+        AlarmRule rule = rule(40);
+        Instant wake = Instant.parse("2026-08-03T23:00:00Z");
+        // 校准 P90=12 比默认 8 晚 4 分钟，建议出门时间应相应推迟 4 分钟
+        Instant defaultLeave = engine.leaveBy(rule, wake);
+        Instant calibratedLeave = engine.leaveBy(rule, wake,
+                new DecisionEngine.BehavioralPriors(4, 12, 10));
+        assertThat(ChronoUnit.MINUTES.between(defaultLeave, calibratedLeave)).isEqualTo(4);
+    }
 }

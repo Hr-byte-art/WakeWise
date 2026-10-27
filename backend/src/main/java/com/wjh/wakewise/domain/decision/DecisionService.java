@@ -11,6 +11,7 @@ import com.wjh.wakewise.domain.alarm.AlarmRepository;
 import com.wjh.wakewise.domain.alarm.AlarmRule;
 import com.wjh.wakewise.domain.alarm.AlarmRuleRepository;
 import com.wjh.wakewise.domain.alarm.Recurrence;
+import com.wjh.wakewise.domain.behavior.BehaviorLearningService;
 import com.wjh.wakewise.domain.decision.DecisionHistory.PlanStatus;
 import com.wjh.wakewise.domain.history.WakeHistory;
 import com.wjh.wakewise.domain.history.WakeHistoryRepository;
@@ -46,6 +47,7 @@ public class DecisionService {
     private final AlarmRepository alarmRepository;
     private final AlarmRuleRepository ruleRepository;
     private final WakeHistoryRepository wakeHistoryRepository;
+    private final BehaviorLearningService behaviorLearningService;
     private final WeatherService weatherService;
     private final DecisionEngine engine;
     private final ExplanationGenerator explanationGenerator;
@@ -58,6 +60,7 @@ public class DecisionService {
                            AlarmRepository alarmRepository,
                            AlarmRuleRepository ruleRepository,
                            WakeHistoryRepository wakeHistoryRepository,
+                           BehaviorLearningService behaviorLearningService,
                            WeatherService weatherService,
                            DecisionEngine engine,
                            ExplanationGenerator explanationGenerator,
@@ -68,6 +71,7 @@ public class DecisionService {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.wakeHistoryRepository = wakeHistoryRepository;
+        this.behaviorLearningService = behaviorLearningService;
         this.weatherService = weatherService;
         this.engine = engine;
         this.explanationGenerator = explanationGenerator;
@@ -152,7 +156,8 @@ public class DecisionService {
 
         AlarmRule rule = requireRule(alarm.getId());
         WeatherRisk weather = weatherService.getMorningRisk(user, targetDate, zone);
-        WakePlan plan = engine.evaluate(alarm, rule, user, weather, targetAt, overrideMaxAdvance);
+        DecisionEngine.BehavioralPriors priors = behaviorLearningService.priorsFor(user.getId());
+        WakePlan plan = engine.evaluate(alarm, rule, user, weather, targetAt, overrideMaxAdvance, priors);
         String explanation = explanationGenerator.generate(plan, alarm, zone, weather);
         return new WakePlan(plan.planId(), plan.alarmId(), "PREVIEW",
                 plan.baselineWakeAt(), plan.recommendedWakeAt(), plan.deltaMinutes(), plan.targetArrivalAt(),
