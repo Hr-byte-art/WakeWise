@@ -13,6 +13,8 @@ import com.wjh.wakewise.network.Dtos.PlanViewDto;
 import com.wjh.wakewise.network.Dtos.RegisterRequest;
 import com.wjh.wakewise.network.Dtos.RevertRequest;
 import com.wjh.wakewise.network.Dtos.ToggleAlarmRequest;
+import com.wjh.wakewise.network.Dtos.UpdateProfileRequest;
+import com.wjh.wakewise.network.Dtos.UserProfile;
 import com.wjh.wakewise.network.Dtos.WeeklyStatsDto;
 
 import java.util.List;
@@ -31,6 +33,12 @@ public interface ApiService {
 
     @POST("auth/login")
     Call<ApiEnvelope<AuthData>> login(@Body LoginRequest request);
+
+    @PATCH("auth/me")
+    Call<ApiEnvelope<UserProfile>> updateProfile(@Body UpdateProfileRequest request);
+
+    @GET("auth/me")
+    Call<ApiEnvelope<UserProfile>> me();
 
     @GET("alarms")
     Call<ApiEnvelope<List<AlarmDto>>> listAlarms();

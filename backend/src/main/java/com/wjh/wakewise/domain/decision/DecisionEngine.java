@@ -2,6 +2,7 @@ package com.wjh.wakewise.domain.decision;
 
 import com.wjh.wakewise.domain.alarm.Alarm;
 import com.wjh.wakewise.domain.alarm.AlarmRule;
+import com.wjh.wakewise.domain.travel.TravelTime;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,7 +48,8 @@ public class DecisionEngine {
     private static final double Z_90 = 1.2816;
     private static final double NORMAL_P90_Z = 1.2816;
 
-    private static final Map<Alarm.TravelMode, Double> TRAVEL_P90_FACTOR = Map.of(
+    /** 各出行方式 P90/P50 尾部系数（TravelEtaService 缓存与 TrafficView 复用）。 */
+    public static final Map<Alarm.TravelMode, Double> TRAVEL_P90_FACTOR = Map.of(
             Alarm.TravelMode.WALK, 1.20,
             Alarm.TravelMode.BIKE, 1.30,
             Alarm.TravelMode.TRANSIT, 1.50,
@@ -80,10 +82,21 @@ public class DecisionEngine {
 
     public WakePlan evaluate(Alarm alarm, AlarmRule rule, UserAccount user, WeatherRisk weather,
                              Instant targetArrivalAt, Integer overrideMaxAdvance, BehavioralPriors priors) {
+        return evaluate(alarm, rule, user, weather, targetArrivalAt, overrideMaxAdvance, priors, null);
+    }
+
+    /**
+     * 完整签名：travel 为真实通勤估计（null/不可用一律回落 rule 手填分钟）。
+     * 真实 ETA 生效时 modelVersion 追加 +ETA，决策留痕可审计。
+     */
+    public WakePlan evaluate(Alarm alarm, AlarmRule rule, UserAccount user, WeatherRisk weather,
+                             Instant targetArrivalAt, Integer overrideMaxAdvance,
+                             BehavioralPriors priors, TravelTime travel) {
         boolean conservative = user.getRiskPreference() == UserAccount.RiskPreference.CONSERVATIVE;
         boolean sleepFirst = user.getRiskPreference() == UserAccount.RiskPreference.SLEEP_FIRST;
         double z = conservative ? Z_90 : sleepFirst ? Z_60 : Z_75;
         double safetyBuffer = conservative ? bufferConservative : sleepFirst ? bufferSleepFirst : bufferBalanced;
+        boolean realTravel = travel != null && travel.available();
 
         // 1. 各阶段耗时的分位数（正态近似，sigma 由 p50/p90 推出）
         double wakeSigma = (priors.wakeLatencyP90Min() - priors.wakeLatencyP50Min()) / NORMAL_P90_Z;
@@ -93,7 +106,9 @@ public class DecisionEngine {
         double prepSigma = prepP50 * (PREP_P90_FACTOR - 1.0) / NORMAL_P90_Z;
         double prepQuantile = prepP50 + z * prepSigma;
 
-        double travelP50 = Math.max(0, rule.getCommuteMinutes());
+        double travelP50 = realTravel
+                ? Math.max(0, travel.durationMinutes())
+                : Math.max(0, rule.getCommuteMinutes());
         Alarm.TravelMode mode = alarm.getTravelMode() == null ? Alarm.TravelMode.NONE : alarm.getTravelMode();
         double travelBaseP90 = travelP50 * TRAVEL_P90_FACTOR.getOrDefault(mode, 1.0);
         double weatherTrail = weather.heavy() ? RAIN_TRAVEL_TRAIL_HEAVY
@@ -177,9 +192,13 @@ public class DecisionEngine {
             reasonCode = "SLEEP_PRESERVED";
         }
 
-        String modelVersion = priors.sampleCount() > 0
-                ? MODEL_VERSION + "+CAL(n=" + priors.sampleCount() + ")"
-                : MODEL_VERSION;
+        String modelVersion = MODEL_VERSION;
+        if (priors.sampleCount() > 0) {
+            modelVersion += "+CAL(n=" + priors.sampleCount() + ")";
+        }
+        if (realTravel) {
+            modelVersion += "+ETA";
+        }
         return new WakePlan(null, alarm.getId(), null,
                 baselineWakeAt, recommended, (int) deltaMinutes, targetArrivalAt,
                 lateProbabilityBefore, lateProbabilityAfter, riskScore, confidence,
@@ -192,8 +211,16 @@ public class DecisionEngine {
     }
 
     public Instant baselineWakeAt(AlarmRule rule, Instant targetArrivalAt, BehavioralPriors priors) {
-        double requiredMean = priors.wakeLatencyP50Min() + Math.max(0, rule.getPrepDurationMin())
-                + Math.max(0, rule.getCommuteMinutes());
+        return baselineWakeAt(rule, targetArrivalAt, priors, null);
+    }
+
+    /** travelP50Minutes 为真实通勤分钟（null 用 rule 手填），MorningContext 无计划时的基准推算用。 */
+    public Instant baselineWakeAt(AlarmRule rule, Instant targetArrivalAt, BehavioralPriors priors,
+                                  Integer travelP50Minutes) {
+        double travelP50 = travelP50Minutes != null
+                ? Math.max(0, travelP50Minutes)
+                : Math.max(0, rule.getCommuteMinutes());
+        double requiredMean = priors.wakeLatencyP50Min() + Math.max(0, rule.getPrepDurationMin()) + travelP50;
         return targetArrivalAt.minus((long) Math.ceil(requiredMean), ChronoUnit.MINUTES);
     }
 

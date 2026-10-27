@@ -4,11 +4,13 @@ import com.wjh.wakewise.common.BusinessException;
 import com.wjh.wakewise.common.ErrorCode;
 import com.wjh.wakewise.common.Ids;
 import com.wjh.wakewise.domain.decision.DecisionService;
+import com.wjh.wakewise.domain.travel.AmapClient;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.user.UserService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -27,15 +29,18 @@ public class AlarmService {
     private final AlarmRuleRepository ruleRepository;
     private final UserService userService;
     private final DecisionService decisionService;
+    private final AmapClient amapClient;
 
     public AlarmService(AlarmRepository alarmRepository,
                         AlarmRuleRepository ruleRepository,
                         UserService userService,
-                        DecisionService decisionService) {
+                        DecisionService decisionService,
+                        AmapClient amapClient) {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.userService = userService;
         this.decisionService = decisionService;
+        this.amapClient = amapClient;
     }
 
     @Transactional
@@ -49,6 +54,15 @@ public class AlarmService {
         alarm.setRecurrence(normalizeRecurrence(request.recurrence()));
         alarm.setDestinationLabel(request.destinationLabel());
         alarm.setTravelMode(parseMode(request.travelMode()));
+        // 目的地坐标缓存（best-effort 地理编码：未配 key/失败留空，估算链路现查兜底）
+        if (request.destinationLabel() != null && !request.destinationLabel().isBlank()) {
+            BigDecimal[] dest = AmapClient.parseLocation(
+                    amapClient.geocode(request.destinationLabel()).orElse(null));
+            if (dest != null) {
+                alarm.setDestLng(dest[0]);
+                alarm.setDestLat(dest[1]);
+            }
+        }
         if (alarm.getTargetType() == Alarm.AlarmType.WAKE_AT) {
             alarm.setBaselineTime(parseTime(request.baselineTime(), "baselineTime"));
         } else {

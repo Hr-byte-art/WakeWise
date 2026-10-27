@@ -9,6 +9,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 
@@ -46,6 +47,13 @@ public class Alarm extends BaseEntity {
     @Column(name = "destination_label", length = 120)
     private String destinationLabel;
 
+    /** 目的地地理编码坐标缓存（V4，destination_label 仍是文本主输入）。 */
+    @Column(name = "dest_lng", precision = 10, scale = 6)
+    private BigDecimal destLng;
+
+    @Column(name = "dest_lat", precision = 9, scale = 6)
+    private BigDecimal destLat;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "travel_mode", length = 16)
     private TravelMode travelMode;
@@ -76,6 +84,10 @@ public class Alarm extends BaseEntity {
     public void setRecurrence(String recurrence) { this.recurrence = recurrence; }
     public String getDestinationLabel() { return destinationLabel; }
     public void setDestinationLabel(String destinationLabel) { this.destinationLabel = destinationLabel; }
+    public BigDecimal getDestLng() { return destLng; }
+    public void setDestLng(BigDecimal destLng) { this.destLng = destLng; }
+    public BigDecimal getDestLat() { return destLat; }
+    public void setDestLat(BigDecimal destLat) { this.destLat = destLat; }
     public TravelMode getTravelMode() { return travelMode; }
     public void setTravelMode(TravelMode travelMode) { this.travelMode = travelMode; }
     public boolean isEnabled() { return enabled; }

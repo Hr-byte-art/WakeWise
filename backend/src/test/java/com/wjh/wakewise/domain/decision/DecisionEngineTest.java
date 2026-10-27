@@ -2,6 +2,7 @@ package com.wjh.wakewise.domain.decision;
 
 import com.wjh.wakewise.domain.alarm.Alarm;
 import com.wjh.wakewise.domain.alarm.AlarmRule;
+import com.wjh.wakewise.domain.travel.TravelTime;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
 import org.junit.jupiter.api.Test;
@@ -148,5 +149,60 @@ class DecisionEngineTest {
         Instant calibratedLeave = engine.leaveBy(rule, wake,
                 new DecisionEngine.BehavioralPriors(4, 12, 10));
         assertThat(ChronoUnit.MINUTES.between(defaultLeave, calibratedLeave)).isEqualTo(4);
+    }
+
+    // ------------------------------------------------------------------ 真实交通 ETA
+
+    @Test
+    void realTravelReplacesManualCommuteAndShiftsBaseline() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        Alarm alarm = alarm(Alarm.TravelMode.TRANSIT);
+        UserAccount u = user();
+        TravelTime slower = new TravelTime(true, 52, 0.90); // 高德说 52 分钟，手填 40
+
+        WakePlan manual = engine.evaluate(alarm, rule(40), u, clear, target, null);
+        WakePlan real = engine.evaluate(alarm, rule(40), u, clear, target, null,
+                DecisionEngine.BehavioralPriors.DEFAULTS, slower);
+
+        // 基准/理想唤醒整体前移 12 分钟（52-40），modelVersion 标注 +ETA
+        assertThat(ChronoUnit.MINUTES.between(real.baselineWakeAt(), manual.baselineWakeAt())).isEqualTo(12);
+        assertThat(real.modelVersion()).isEqualTo("QUANTILE_V1+ETA");
+        assertThat(real.recommendedWakeAt()).isBeforeOrEqualTo(manual.recommendedWakeAt());
+    }
+
+    @Test
+    void unavailableTravelBehavesExactlyLikeNoTravel() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        Alarm alarm = alarm(Alarm.TravelMode.TRANSIT);
+        UserAccount u = user();
+
+        WakePlan without = engine.evaluate(alarm, rule(40), u, clear, target, null);
+        WakePlan withUnavailable = engine.evaluate(alarm, rule(40), u, clear, target, null,
+                DecisionEngine.BehavioralPriors.DEFAULTS, TravelTime.unavailable());
+        WakePlan withNull = engine.evaluate(alarm, rule(40), u, clear, target, null,
+                DecisionEngine.BehavioralPriors.DEFAULTS, null);
+
+        // 不可用/未传逐字节一致：ETA 失败对旧行为零感知（确定性锚定）
+        assertThat(withUnavailable.modelVersion()).isEqualTo("QUANTILE_V1");
+        assertThat(withUnavailable.baselineWakeAt()).isEqualTo(without.baselineWakeAt());
+        assertThat(withUnavailable.recommendedWakeAt()).isEqualTo(without.recommendedWakeAt());
+        assertThat(withNull.recommendedWakeAt()).isEqualTo(without.recommendedWakeAt());
+    }
+
+    @Test
+    void modelVersionCombinesCalibrationAndEta() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        WakePlan plan = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 6), new TravelTime(true, 40, 0.90));
+        assertThat(plan.modelVersion()).isEqualTo("QUANTILE_V1+CAL(n=6)+ETA");
+    }
+
+    @Test
+    void baselineWakeAtAcceptsRealTravelOverride() {
+        AlarmRule rule = rule(40);
+        // 手填 40 → 真实 25：基准唤醒应晚 15 分钟（requiredMean 更小）
+        Instant manual = engine.baselineWakeAt(rule, target, DecisionEngine.BehavioralPriors.DEFAULTS);
+        Instant real = engine.baselineWakeAt(rule, target, DecisionEngine.BehavioralPriors.DEFAULTS, 25);
+        assertThat(ChronoUnit.MINUTES.between(manual, real)).isEqualTo(15);
     }
 }

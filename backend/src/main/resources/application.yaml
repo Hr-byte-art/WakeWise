@@ -66,6 +66,10 @@ wakewise:
     connect-timeout-ms: ${LLM_CONNECT_TIMEOUT_MS:2000}
     read-timeout-ms: ${LLM_READ_TIMEOUT_MS:5000}
     max-chars: ${LLM_MAX_CHARS:300}
+  amap:
+    # 高德 Web 服务 key（lbs.amap.com 个人开发者注册，选"Web 服务"类型）；留空即不启用真实 ETA，
+    # 通勤时长回落用户手填分钟。地址→坐标在建闹钟/设常驻地址时缓存，路径规划结果缓存 2 小时。
+    key: ${AMAP_KEY:}
 
 # API 文档(knife4j):http://localhost:8080/doc.html
 springdoc:

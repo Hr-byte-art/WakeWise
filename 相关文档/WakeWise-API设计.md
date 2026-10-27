@@ -393,6 +393,7 @@
       "mode": "TRANSIT",
       "etaP50Minutes": 38,
       "etaP90Minutes": 47,
+      "etaSource": "AMAP",
       "status": "SLOWER_THAN_USUAL"
     },
     "firstEvent": {
@@ -413,6 +414,10 @@
 ```
 
 `calibration` 为可选字段（未校准/样本不足时为 `null`）：起床延迟先验已按该用户真实起床历史校准，`estimateMinutes` 为校准后的 P50。
+
+`traffic.etaSource` 为可选字段（`"AMAP"` 或 `null`）：配置 `AMAP_KEY` 且常驻地址/目的地可解析时，`etaP50Minutes` 来自高德路径规划真实耗时，否则为用户手填通勤分钟。
+
+> 当前实现补充（认证域）：`GET /api/v1/auth/me` 返回资料（含 `homeAddress`）；`PATCH /api/v1/auth/me` body `{"homeAddress": "..."}` 更新常驻地址（家）——真实交通 ETA 的出发地，传空串清除，地址变更时后端自动地理编码缓存坐标。
 
 ## 7. 反馈与统计 API
 

@@ -56,6 +56,8 @@ erDiagram
 
 索引：`uk_user_email(email)`；如需手机号检索，额外保存带独立密钥的 HMAC，不对密文建模糊索引。
 
+> 当前实现（V4 增列）：`home_address VARCHAR(160)`（常驻地址/家，真实 ETA 出发地）+ `home_lng DECIMAL(10,6)` / `home_lat DECIMAL(9,6)` 地理编码坐标缓存；`phone_ciphertext` 未建列。
+
 ### 3.2 `alarm` — 闹钟/晨间目标
 
 | 字段 | 类型 | 约束 | 说明 |
@@ -76,6 +78,8 @@ erDiagram
 | `version` | `BIGINT` | NOT NULL | 乐观锁版本 |
 
 索引：`idx_alarm_user_enabled(user_id, enabled)`、`idx_alarm_next_trigger(next_trigger_at, enabled)`。
+
+> 当前实现（V4 增列）：`destination_label VARCHAR(120)` 明文 + `dest_lng/dest_lat DECIMAL` 地理编码坐标缓存（建闹钟时 best-effort 落库，估算时缺失则现查不回写）；设计中的 `target_at/calendar_event_ref/destination_ciphertext` 未建列，目标时间按 recurrence+`target_local_time` 推算。
 
 ### 3.3 `alarm_rule` — 闹钟规则
 
@@ -143,6 +147,8 @@ erDiagram
 | `created_at` | `DATETIME(3)` | NOT NULL | 创建时间 |
 
 索引：`idx_traffic_lookup(route_key, departure_bucket, observed_at)`、`idx_traffic_expire(expires_at)`。
+
+> 当前实现（V4）：已建表，`route_key` 为 `o<起点4dp>|d<终点4dp>|m<方式>`（≤64 字符），`eta_p90_sec` 由 p50 × 方式尾部系数推导；`departure_bucket/incident_count/payload_json` 未建列（MVP 用 2 小时 TTL 快照，不区分出发时段桶），数据源为高德路径规划。
 
 ### 3.6 `wake_history` — 晨间执行历史
 

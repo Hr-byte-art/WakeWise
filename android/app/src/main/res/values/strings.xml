@@ -85,6 +85,11 @@
     <string name="stats_risk_title">主要风险来源</string>
     <string name="stats_no_risk">暂无数据</string>
     <string name="btn_logout">退出登录</string>
+    <string name="stats_home_address">常驻地址（家）</string>
+    <string name="stats_home_value">常驻地址（家）：%1$s</string>
+    <string name="stats_home_unset">常驻地址（家）：未设置</string>
+    <string name="stats_home_hint">如：北京市海淀区中关村大街1号</string>
+    <string name="stats_home_saved">已保存，通勤估算将从这里出发</string>
 
     <string-array name="alarm_types">
         <item>目标到达（几点前必须到）</item>

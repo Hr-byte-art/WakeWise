@@ -22,18 +22,22 @@ public final class AuthDtos {
             @NotBlank String password) {
     }
 
+    public record UpdateProfileRequest(String homeAddress) {
+    }
+
     public record UserProfile(
             String id,
             String email,
             String displayName,
             String timezone,
             String city,
+            String homeAddress,
             String riskPreference,
             int automationLevel) {
 
         public static UserProfile from(UserAccount user) {
             return new UserProfile(user.getId(), user.getEmail(), user.getDisplayName(),
-                    user.getTimezone(), user.getCity(),
+                    user.getTimezone(), user.getCity(), user.getHomeAddress(),
                     user.getRiskPreference().name(), user.getAutomationLevel());
         }
     }

@@ -14,7 +14,7 @@ WakeWise 不是一个"根据天气提前几分钟"的闹钟，而是一套晨间
 | 客户端 | **原生 Android（Java 17 + XML + ViewBinding）** | 精确闹钟、全屏响铃、开机重排、离线兜底 |
 | 后端 | **Spring Boot 3.3 + Java 21**（模块化单体） | 决策引擎、可靠性链路、Quartz 夜间任务 |
 | 存储 | MySQL 8（Flyway 迁移） | 事务与审计数据 |
-| 外部数据 | Open-Meteo（天气，免 Key）；LLM 文案（OpenAI 兼容端点，可选、用户自配） | 失败自动降级 |
+| 外部数据 | Open-Meteo（天气，免 Key）；LLM 文案（OpenAI 兼容端点，可选）；高德路径规划（可选） | 失败自动降级 |
 | 认证 | JWT（Spring Security） | MVP 简化实现 |
 
 > 注：这是**推倒重写**后的版本。旧版（Flutter + Spring Boot）代码仍在 git 历史 `5a510ed` 中可查。
@@ -35,6 +35,7 @@ WakeWise/
 │           ├── alarm/       # 闹钟 CRUD + 规则
 │           ├── behavior/    # 行为学习（起床延迟 SHRINK_V1 校准）
 │           ├── weather/     # Open-Meteo 客户端 + 缓存降级
+│           ├── travel/      # 高德地理编码/路径规划 + ETA 缓存降级
 │           ├── decision/    # 分位数决策引擎 + 计划状态机 + 设备同步
 │           ├── morning/     # 晨间简报
 │           ├── statistics/  # 周度统计
@@ -78,6 +79,7 @@ MYSQL_USER=root MYSQL_PASSWORD=你的密码 mvn spring-boot:run
   | Kimi | `https://api.moonshot.cn/v1` | `moonshot-v1-8k` |
 
   红线：LLM 只做文案改写（提示词只含引擎算好的事实，禁止编造/推算时间），失败/超时/空白输出一律即时回落模板——AI 可以失败，闹钟不能。
+- **真实交通 ETA（可选，默认关闭）**：`AMAP_KEY`（高德 Web 服务 key）+ App 统计页设置"常驻地址（家）"，闹钟目的地照旧填地址文本；三者齐备后通勤分钟来自高德路径规划（按出行方式选步行/骑行/公交/驾车），失败回落手填分钟。
 
 ### Android 客户端
 
@@ -119,6 +121,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/auth/register` `/auth/login` | 注册/登录（返回 JWT） |
+| GET/PATCH | `/auth/me` | 资料 / 更新常驻地址（家，ETA 出发地） |
 | GET/POST/PATCH/DELETE | `/alarms[/{id}]` | 闹钟 CRUD（乐观锁版本） |
 | POST | `/alarms/{id}/preview` | 即时预览计划 |
 | POST | `/decisions/evaluate` | 生成正式计划 |
@@ -137,7 +140,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 ## 已知限制（诚实清单）
 
 - iOS：客户端为原生 Android，暂无 iOS 版本（旧 Flutter 端可从 git 历史恢复参考）。
-- 交通 ETA：MVP 使用用户设置的通勤估计 + 天气修正，未接地图 API（决策引擎预留了口子）。
+- 交通 ETA（一期已实装）：高德 Web 服务 API——常驻地址（家）与闹钟目的地做地理编码缓存坐标，按出行方式路径规划取真实耗时替换手填通勤分钟（2 小时缓存，`AMAP_KEY` 环境变量配置，未配置/失败回落手填）；modelVersion 标注 `+ETA`，晨间简报 traffic 带 `etaSource`。多方式组合策略与实时路况为规划。
 - 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备/通勤时长仍用用户设置值；出门事件（USER_LEFT_HOME）仅积累数据、暂不参与决策；`occurredAt` 信任客户端时钟，偏差治理留待后续。
 - LLM 解释文案：已实装 OpenAI 兼容可配置客户端（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 三项留空即纯模板、零感知）；自研轻量 RestClient 客户端而非 Spring AI（Spring AI 1.0 官方仅支持 Boot 3.4+，本项目钉在 Boot 3.3，接口留有替换位）。
 - 日历接入（一期已实装）：闹钟编辑页可"从日历导入"明日首个非全天日历事件，自动填目标到达时间（名称/地点为空时一并带上；运行时申请 READ_CALENDAR，拒绝或无日程只提示、不影响手动建闹钟）；多日历账户选择、后台自动读取为规划。

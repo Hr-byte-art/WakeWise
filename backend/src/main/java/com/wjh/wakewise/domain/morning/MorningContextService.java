@@ -11,6 +11,8 @@ import com.wjh.wakewise.domain.decision.DecisionEngine;
 import com.wjh.wakewise.domain.decision.DecisionHistory;
 import com.wjh.wakewise.domain.decision.DecisionService;
 import com.wjh.wakewise.domain.user.UserAccount;
+import com.wjh.wakewise.domain.travel.TravelEtaService;
+import com.wjh.wakewise.domain.travel.TravelTime;
 import com.wjh.wakewise.domain.user.UserService;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
 import com.wjh.wakewise.domain.weather.WeatherService;
@@ -35,6 +37,7 @@ public class MorningContextService {
     private final DecisionEngine engine;
     private final DecisionService decisionService;
     private final BehaviorLearningService behaviorLearningService;
+    private final TravelEtaService travelEtaService;
 
     public MorningContextService(AlarmRepository alarmRepository,
                                  AlarmRuleRepository ruleRepository,
@@ -42,7 +45,8 @@ public class MorningContextService {
                                  WeatherService weatherService,
                                  DecisionEngine engine,
                                  DecisionService decisionService,
-                                 BehaviorLearningService behaviorLearningService) {
+                                 BehaviorLearningService behaviorLearningService,
+                                 TravelEtaService travelEtaService) {
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
         this.userService = userService;
@@ -50,6 +54,7 @@ public class MorningContextService {
         this.engine = engine;
         this.decisionService = decisionService;
         this.behaviorLearningService = behaviorLearningService;
+        this.travelEtaService = travelEtaService;
     }
 
     public record WakePlanView(String wakeAt, String leaveBy, String arriveBy,
@@ -60,7 +65,8 @@ public class MorningContextService {
     public record WeatherView(String summary, String level, String alert, List<String> suggestions) {
     }
 
-    public record TrafficView(String mode, int etaP50Minutes, int etaP90Minutes, String status) {
+    public record TrafficView(String mode, int etaP50Minutes, int etaP90Minutes,
+                              String etaSource, String status) {
     }
 
     public record EventView(String title, String startAt, String locationLabel) {
@@ -97,6 +103,7 @@ public class MorningContextService {
         String travelMode = null;
         int etaP50 = 0;
         int etaP90 = 0;
+        String etaSource = null;
 
         for (Alarm alarm : alarmRepository.findByUserIdAndEnabledTrue(userId)) {
             Set<DayOfWeek> days = Recurrence.parse(alarm.getRecurrence());
@@ -110,7 +117,10 @@ public class MorningContextService {
             if (alarm.getTargetType() == Alarm.AlarmType.ARRIVE_BY) {
                 Instant targetAt = target.atTime(alarm.getTargetLocalTime()).atZone(zone).toInstant();
                 DecisionHistory plan = decisionService.latestPlanFor(alarm.getId(), targetAt);
-                Instant wake = plan != null ? plan.getRecommendedAt() : engine.baselineWakeAt(rule, targetAt, priors);
+                TravelTime travel = travelEtaService.estimate(user, alarm);
+                Instant wake = plan != null ? plan.getRecommendedAt()
+                        : engine.baselineWakeAt(rule, targetAt, priors,
+                                travel.available() ? travel.durationMinutes() : null);
                 if (bestWake == null || wake.isBefore(bestWake)) {
                     bestWake = wake;
                     bestLeave = engine.leaveBy(rule, wake, priors);
@@ -123,8 +133,12 @@ public class MorningContextService {
                     eventLocation = alarm.getDestinationLabel();
                     eventStart = targetAt;
                     travelMode = alarm.getTravelMode() == null ? null : alarm.getTravelMode().name();
-                    etaP50 = rule.getCommuteMinutes();
-                    etaP90 = etaP50 == 0 ? 0 : Math.max(etaP50 + 5, (int) Math.round(etaP50 * 1.3));
+                    // 真实 ETA 生效时用路径规划分钟，否则手填；P90 按方式尾部系数
+                    Alarm.TravelMode mode = alarm.getTravelMode() == null ? Alarm.TravelMode.NONE : alarm.getTravelMode();
+                    etaP50 = travel.available() ? travel.durationMinutes() : rule.getCommuteMinutes();
+                    etaP90 = etaP50 == 0 ? 0
+                            : Math.max(etaP50 + 5, (int) Math.round(etaP50 * DecisionEngine.TRAVEL_P90_FACTOR.get(mode)));
+                    etaSource = travel.available() ? "AMAP" : null;
                 }
             } else {
                 Instant wake = target.atTime(alarm.getBaselineTime()).atZone(zone).toInstant();
@@ -168,7 +182,7 @@ public class MorningContextService {
                         bestArrive == null ? null : bestArrive.toString(),
                         bestPlanId, bestDelta, bestExplanation, bestRequiresConfirmation),
                 new WeatherView(summary, weather.level(), weather.alertLevel(), suggestions),
-                new TrafficView(travelMode, etaP50, etaP90,
+                new TrafficView(travelMode, etaP50, etaP90, etaSource,
                         etaP50 == 0 ? null : (weather.heavy() || weather.moderate() ? "SLOWER_THAN_USUAL" : "NORMAL")),
                 eventTitle == null ? null : new EventView(eventTitle,
                         eventStart == null ? null : eventStart.toString(), eventLocation),

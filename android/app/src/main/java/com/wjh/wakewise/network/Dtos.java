@@ -56,8 +56,18 @@ public final class Dtos {
         public String displayName;
         public String timezone;
         public String city;
+        public String homeAddress;
         public String riskPreference;
         public int automationLevel;
+    }
+
+    /** 更新常驻地址（家）：真实交通 ETA 的出发地；空串清除。 */
+    public static class UpdateProfileRequest {
+        public String homeAddress;
+
+        public UpdateProfileRequest(String homeAddress) {
+            this.homeAddress = homeAddress;
+        }
     }
 
     // ---------------- 闹钟 ----------------
@@ -248,6 +258,7 @@ public final class Dtos {
         public String mode;
         public int etaP50Minutes;
         public int etaP90Minutes;
+        public String etaSource;
         public String status;
     }
 

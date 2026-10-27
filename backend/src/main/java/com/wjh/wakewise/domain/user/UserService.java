@@ -4,10 +4,12 @@ import com.wjh.wakewise.common.BusinessException;
 import com.wjh.wakewise.common.ErrorCode;
 import com.wjh.wakewise.common.Ids;
 import com.wjh.wakewise.config.JwtService;
+import com.wjh.wakewise.domain.travel.AmapClient;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Service
@@ -16,13 +18,16 @@ public class UserService {
     private final UserAccountRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AmapClient amapClient;
 
     public UserService(UserAccountRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtService jwtService) {
+                       JwtService jwtService,
+                       AmapClient amapClient) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.amapClient = amapClient;
     }
 
     @Transactional
@@ -61,5 +66,26 @@ public class UserService {
     public UserAccount requireUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在"));
+    }
+
+    /**
+     * 更新常驻地址（家）：地址变更时顺带做地理编码落坐标缓存（best-effort，
+     * 未配 key/失败留空，估算链路会现查兜底）；空串清除地址与坐标。
+     */
+    @Transactional
+    public AuthDtos.UserProfile updateHomeAddress(String userId, String homeAddress) {
+        UserAccount user = requireUser(userId);
+        if (homeAddress == null || homeAddress.isBlank()) {
+            user.setHomeAddress(null);
+            user.setHomeLng(null);
+            user.setHomeLat(null);
+            return AuthDtos.UserProfile.from(user);
+        }
+        user.setHomeAddress(homeAddress.trim());
+        BigDecimal[] location = AmapClient.parseLocation(
+                amapClient.geocode(user.getHomeAddress()).orElse(null));
+        user.setHomeLng(location == null ? null : location[0]);
+        user.setHomeLat(location == null ? null : location[1]);
+        return AuthDtos.UserProfile.from(user);
     }
 }

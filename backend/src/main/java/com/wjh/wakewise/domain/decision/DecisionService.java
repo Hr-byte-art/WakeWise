@@ -18,6 +18,8 @@ import com.wjh.wakewise.domain.history.DeviceEventRepository;
 import com.wjh.wakewise.domain.history.WakeHistory;
 import com.wjh.wakewise.domain.history.WakeHistoryRepository;
 import com.wjh.wakewise.domain.notification.NotificationService;
+import com.wjh.wakewise.domain.travel.TravelEtaService;
+import com.wjh.wakewise.domain.travel.TravelTime;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.weather.WeatherRisk;
 import com.wjh.wakewise.domain.weather.WeatherService;
@@ -52,6 +54,7 @@ public class DecisionService {
     private final DeviceEventRepository deviceEventRepository;
     private final BehaviorLearningService behaviorLearningService;
     private final WeatherService weatherService;
+    private final TravelEtaService travelEtaService;
     private final DecisionEngine engine;
     private final ExplanationGenerator explanationGenerator;
     private final NotificationService notificationService;
@@ -66,6 +69,7 @@ public class DecisionService {
                            DeviceEventRepository deviceEventRepository,
                            BehaviorLearningService behaviorLearningService,
                            WeatherService weatherService,
+                           TravelEtaService travelEtaService,
                            DecisionEngine engine,
                            ExplanationGenerator explanationGenerator,
                            NotificationService notificationService,
@@ -78,6 +82,7 @@ public class DecisionService {
         this.deviceEventRepository = deviceEventRepository;
         this.behaviorLearningService = behaviorLearningService;
         this.weatherService = weatherService;
+        this.travelEtaService = travelEtaService;
         this.engine = engine;
         this.explanationGenerator = explanationGenerator;
         this.notificationService = notificationService;
@@ -161,8 +166,10 @@ public class DecisionService {
 
         AlarmRule rule = requireRule(alarm.getId());
         WeatherRisk weather = weatherService.getMorningRisk(user, targetDate, zone);
+        // 真实通勤 ETA（增强链路：不可用时引擎回落 rule 手填分钟，modelVersion 不带 +ETA）
+        TravelTime travel = travelEtaService.estimate(user, alarm);
         DecisionEngine.BehavioralPriors priors = behaviorLearningService.priorsFor(user.getId());
-        WakePlan plan = engine.evaluate(alarm, rule, user, weather, targetAt, overrideMaxAdvance, priors);
+        WakePlan plan = engine.evaluate(alarm, rule, user, weather, targetAt, overrideMaxAdvance, priors, travel);
         String explanation = explanationGenerator.generate(plan, alarm, zone, weather);
         return new WakePlan(plan.planId(), plan.alarmId(), "PREVIEW",
                 plan.baselineWakeAt(), plan.recommendedWakeAt(), plan.deltaMinutes(), plan.targetArrivalAt(),
