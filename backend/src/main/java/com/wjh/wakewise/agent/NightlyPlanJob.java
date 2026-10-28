@@ -2,7 +2,6 @@ package com.wjh.wakewise.agent;
 
 import com.wjh.wakewise.domain.alarm.Alarm;
 import com.wjh.wakewise.domain.alarm.AlarmRepository;
-import com.wjh.wakewise.domain.alarm.AlarmService;
 import com.wjh.wakewise.domain.decision.DecisionService;
 import com.wjh.wakewise.domain.user.UserAccount;
 import com.wjh.wakewise.domain.user.UserAccountRepository;
@@ -14,8 +13,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 夜间计划任务（默认 22:00）：
- * 对目标到达型闹钟评估并生成/更新晨间计划；固定闹钟仅刷新下一次触发时间。
- * 单实例 MVP 使用内存 JobStore；业务幂等由 planId 唯一约束与状态机保证。
+ * 对所有启用闹钟统一调 evaluateAndPropose：
+ *   - ARRIVE_BY 走分位数引擎 + 自动 ARM/待确认策略
+ *   - WAKE_AT   写 KEEP_BASELINE 历史 + 刷新 next_trigger_at
+ * 业务幂等由 planId 唯一约束与状态机保证。
  */
 public class NightlyPlanJob implements Job {
 
@@ -33,9 +34,6 @@ public class NightlyPlanJob implements Job {
     @Autowired
     private DecisionService decisionService;
 
-    @Autowired
-    private AlarmService alarmService;
-
     @Override
     public void execute(JobExecutionContext context) {
         log.info("Nightly plan job triggered");
@@ -47,12 +45,8 @@ public class NightlyPlanJob implements Job {
                 continue;
             }
             try {
-                if (alarm.getTargetType() == Alarm.AlarmType.ARRIVE_BY) {
-                    decisionService.evaluateAndPropose(alarm, user, "NIGHTLY_PLAN");
-                    evaluated++;
-                } else {
-                    alarm.setNextTriggerAt(alarmService.computeNextTrigger(alarm, user));
-                }
+                decisionService.evaluateAndPropose(alarm, user, "NIGHTLY_PLAN");
+                evaluated++;
             } catch (Exception e) {
                 failed++;
                 log.error("Nightly plan failed for alarm {}: {}", alarm.getId(), e.getMessage(), e);

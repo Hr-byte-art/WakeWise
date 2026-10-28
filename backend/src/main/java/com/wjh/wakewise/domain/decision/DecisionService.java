@@ -106,8 +106,11 @@ public class DecisionService {
 
     @Transactional
     public WakePlan evaluateAndPropose(Alarm alarm, UserAccount user, String trigger) {
-        if (alarm.getTargetType() != Alarm.AlarmType.ARRIVE_BY || !alarm.isEnabled()) {
+        if (!alarm.isEnabled()) {
             return null;
+        }
+        if (alarm.getTargetType() != Alarm.AlarmType.ARRIVE_BY) {
+            return evaluateWakeAt(alarm, user, trigger);
         }
         WakePlan computed = compute(alarm, user, null);
 
@@ -160,13 +163,82 @@ public class DecisionService {
         return withPersistence(computed, history);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public WakePlan previewForUser(String userId, String alarmId, UserAccount user, Integer overrideMaxAdvance) {
         Alarm alarm = ownedAlarm(userId, alarmId);
-        if (alarm.getTargetType() != Alarm.AlarmType.ARRIVE_BY) {
-            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "仅目标到达型闹钟支持计划预览");
+        if (alarm.getTargetType() == Alarm.AlarmType.ARRIVE_BY) {
+            return compute(alarm, user, overrideMaxAdvance);
         }
-        return compute(alarm, user, overrideMaxAdvance);
+        // WAKE_AT：基线即推荐，delta=0，理由 KEEP_BASELINE（不让用户在编辑页对固定闹钟产生分位数预期）
+        ZoneId zone = ZoneId.of(user.getTimezone());
+        Instant wakeAt = Recurrence.nextOccurrence(
+                Recurrence.parse(alarm.getRecurrence()), alarm.getBaselineTime(), zone, Instant.now());
+        WeatherRisk weather = weatherService.getMorningRisk(user, LocalDate.ofInstant(wakeAt, zone), zone);
+        double confidence = weather.available() ? 0.65 + 0.30 * weather.qualityScore() : 0.55;
+        CredentialService.LlmAccess llmAccess = credentialService.llmFor(user.getId());
+        String explanation = explanationGenerator.generate(
+                new WakePlan(null, alarm.getId(), "PREVIEW", wakeAt, wakeAt, 0, wakeAt,
+                        0.0, 0.0, 0.0, confidence, List.of(), "KEEP_BASELINE", null, false,
+                        DecisionEngine.MODEL_VERSION),
+                alarm, zone, weather, llmAccess.endpoint());
+        return new WakePlan(null, alarm.getId(), "PREVIEW",
+                wakeAt, wakeAt, 0, wakeAt,
+                0.0, 0.0, 0.0, confidence, List.of(), "KEEP_BASELINE", explanation, false,
+                DecisionEngine.MODEL_VERSION);
+    }
+
+    /**
+     * WAKE_AT 评估：基线即推荐，写一条 KEEP_BASELINE 历史 + 刷新 alarm.next_trigger_at，
+     * status=DISPATCHING（固定时间无需用户确认）。逻辑与 previewForUser 的 WAKE_AT 分支同源，
+     * 区别仅在落库 + 通知。
+     */
+    private WakePlan evaluateWakeAt(Alarm alarm, UserAccount user, String trigger) {
+        ZoneId zone = ZoneId.of(user.getTimezone());
+        Instant wakeAt = Recurrence.nextOccurrence(
+                Recurrence.parse(alarm.getRecurrence()), alarm.getBaselineTime(), zone, Instant.now());
+        LocalDate targetDate = LocalDate.ofInstant(wakeAt, zone);
+        WeatherRisk weather = weatherService.getMorningRisk(user, targetDate, zone);
+        double confidence = weather.available() ? 0.65 + 0.30 * weather.qualityScore() : 0.55;
+        List<WakePlan.Factor> factors = List.of();
+        CredentialService.LlmAccess llmAccess = credentialService.llmFor(user.getId());
+        String explanation = explanationGenerator.generate(
+                new WakePlan(null, alarm.getId(), "PREVIEW", wakeAt, wakeAt, 0, wakeAt,
+                        0.0, 0.0, 0.0, confidence, factors, "KEEP_BASELINE", null, false,
+                        DecisionEngine.MODEL_VERSION),
+                alarm, zone, weather, llmAccess.endpoint());
+
+        DecisionHistory history = new DecisionHistory();
+        history.setId(Ids.newId());
+        history.setPlanId(Ids.newId());
+        history.setUserId(user.getId());
+        history.setAlarmId(alarm.getId());
+        history.setBaselineAt(wakeAt);
+        history.setRecommendedAt(wakeAt);
+        history.setTargetAt(wakeAt);
+        history.setStatus(PlanStatus.DISPATCHING);
+        history.setEffectiveAt(Instant.now());
+        history.setDeltaMinutes(0);
+        history.setLateProbabilityBefore(DecisionDtos.bd(0.0, 5));
+        history.setLateProbabilityAfter(DecisionDtos.bd(0.0, 5));
+        history.setRiskScore(DecisionDtos.bd(0.0, 4));
+        history.setConfidence(DecisionDtos.bd(confidence, 4));
+        history.setFactorContributionJson("[]");
+        history.setReasonCode("KEEP_BASELINE");
+        history.setExplanation(explanation);
+        history.setModelVersion(DecisionEngine.MODEL_VERSION);
+        history.setTriggerType(trigger);
+        decisionRepository.save(history);
+
+        // 固定闹钟：直接刷新下一次触发时间，无需 ARM 流程
+        alarm.setNextTriggerAt(wakeAt);
+        log.info("WakeAt plan armed: alarm={}, planId={}, wakeAt={}",
+                alarm.getId(), history.getPlanId(), wakeAt);
+        return withPersistence(
+                new WakePlan(history.getPlanId(), alarm.getId(), "DISPATCHING",
+                        wakeAt, wakeAt, 0, wakeAt,
+                        0.0, 0.0, 0.0, confidence, factors, "KEEP_BASELINE",
+                        explanation, false, DecisionEngine.MODEL_VERSION),
+                history);
     }
 
     /** 组装上下文并调用引擎（不落库）。 */
@@ -369,6 +441,7 @@ public class DecisionService {
     public List<DecisionHistory> decisionsAfter(String userId, Instant after) {
         return decisionRepository.findByUserIdAndCreatedAtAfter(userId, after);
     }
+
 
     // ------------------------------------------------------------------ 内部工具
 
