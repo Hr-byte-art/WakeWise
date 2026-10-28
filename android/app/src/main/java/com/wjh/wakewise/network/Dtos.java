@@ -281,7 +281,6 @@ public final class Dtos {
     }
 
     // ---------------- 设置（BYOK 外部服务凭据） ----------------
-
     /** 服务状态回显：api_key 不回显；sourceLabel 中文（你的配置生效中/服务端默认/已禁用/未启用）。 */
     public static class ExternalServiceStatusDto {
         public String service;
@@ -304,5 +303,39 @@ public final class Dtos {
             this.model = model;
             this.disabled = disabled;
         }
+    }
+
+    // ---------------- 预览（P0-3 新增） ----------------
+
+    public static class PreviewRequest {
+        public Integer maxAdvanceMinutes;
+
+        public PreviewRequest(Integer maxAdvanceMinutes) {
+            this.maxAdvanceMinutes = maxAdvanceMinutes;
+        }
+    }
+
+    public static class PreviewFactorDto {
+        public String code;
+        public int impactMinutes;
+        public String label;
+    }
+
+    public static class PreviewPlanDto {
+        public String planId;
+        public String alarmId;
+        public String status;
+        public String baselineWakeAt;
+        public String recommendedWakeAt;
+        public int deltaMinutes;
+        public String targetArrivalAt;
+        public double lateProbabilityBefore;
+        public double lateProbabilityAfter;
+        public double riskScore;
+        public double confidence;
+        public List<PreviewFactorDto> topFactors;
+        public String reasonCode;
+        public String explanation;
+        public String modelVersion;
     }
 }

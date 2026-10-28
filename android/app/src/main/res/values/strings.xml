@@ -63,6 +63,20 @@
     <string name="delete">删除</string>
     <string name="cancel">取消</string>
     <string name="new_alarm_title">新建晨间目标</string>
+
+    <!-- 预览对话框 -->
+    <string name="preview_title">明早计划预览</string>
+    <string name="preview_baseline">按基线：%1$s 起床</string>
+    <string name="preview_recommended">建议时间：%1$s</string>
+    <string name="preview_delta_early">提前 %1$d 分钟</string>
+    <string name="preview_delta_late">延后 %1$d 分钟</string>
+    <string name="preview_delta_zero">与基线相同</string>
+    <string name="preview_prob_before">原始迟到概率：%1$d%%</string>
+    <string name="preview_prob_after">调整后迟到概率：%1$d%%</string>
+    <string name="preview_confidence">置信度：%1$d%%</string>
+    <string name="preview_factors">主要因素：%1$s</string>
+    <string name="preview_close">关闭</string>
+    <string name="preview">预估明早计划</string>
     <string name="save">保存</string>
     <string name="label_name">名称</string>
     <string name="label_time">时间（HH:mm）</string>

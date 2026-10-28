@@ -15,6 +15,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
@@ -27,6 +28,8 @@ import com.wjh.wakewise.network.ApiErrors;
 import com.wjh.wakewise.network.Dtos.AlarmDto;
 import com.wjh.wakewise.network.Dtos.ApiEnvelope;
 import com.wjh.wakewise.network.Dtos.CreateAlarmRequest;
+import com.wjh.wakewise.network.Dtos.PreviewPlanDto;
+import com.wjh.wakewise.network.Dtos.PreviewRequest;
 import com.wjh.wakewise.network.Dtos.RuleInput;
 import com.wjh.wakewise.sync.PlanSyncWorker;
 
@@ -93,6 +96,7 @@ public class AlarmEditFragment extends Fragment {
         });
 
         binding.btnSave.setOnClickListener(v -> save());
+        binding.btnPreview.setOnClickListener(v -> preview());
         return binding.getRoot();
     }
 
@@ -130,18 +134,44 @@ public class AlarmEditFragment extends Fragment {
     }
 
     private void save() {
+        CreateAlarmRequest request = buildRequest();
+        if (request == null) {
+            return; // 校验失败，Toast 已展示
+        }
+        binding.btnSave.setEnabled(false);
+        Async.run(() -> createAlarmThen(request, this::onSaveSuccess, this::onSaveError));
+    }
+
+    /** 预览：先 createAlarm 拿 alarmId，再调 /preview，把结果用 AlertDialog 展示，留在本页。 */
+    private void preview() {
+        CreateAlarmRequest request = buildRequest();
+        if (request == null) {
+            return;
+        }
+        binding.btnPreview.setEnabled(false);
+        Async.run(() -> createAlarmThen(request,
+                alarmId -> fetchAndShowPreview(alarmId, parseInt(binding.inputMaxAdvance, 30)),
+                error -> Async.main(() -> {
+                    if (binding != null) {
+                        binding.btnPreview.setEnabled(true);
+                        Toast.makeText(requireContext(), error, Toast.LENGTH_LONG).show();
+                    }
+                })));
+    }
+
+    /** 从表单构造请求；返回 null 表示校验失败。 */
+    private CreateAlarmRequest buildRequest() {
         String name = binding.inputName.getText().toString().trim();
         if (name.isEmpty()) {
             Toast.makeText(requireContext(), R.string.error_fill_all, Toast.LENGTH_SHORT).show();
-            return;
+            return null;
         }
         boolean arriveBy = binding.spinnerType.getSelectedItemPosition() == 0;
         String recurrence = collectRecurrence();
         if (recurrence.isEmpty()) {
             Toast.makeText(requireContext(), R.string.error_pick_day, Toast.LENGTH_SHORT).show();
-            return;
+            return null;
         }
-
         RuleInput rule = new RuleInput(
                 parseInt(binding.inputPrep, 30),
                 parseInt(binding.inputCommute, 40),
@@ -149,8 +179,7 @@ public class AlarmEditFragment extends Fragment {
                 10,
                 false,
                 AUTOMATION_LEVELS[binding.spinnerAutomation.getSelectedItemPosition()]);
-
-        CreateAlarmRequest request = new CreateAlarmRequest(
+        return new CreateAlarmRequest(
                 name,
                 arriveBy ? "ARRIVE_BY" : "WAKE_AT",
                 arriveBy ? selectedTime : null,
@@ -158,35 +187,134 @@ public class AlarmEditFragment extends Fragment {
                 textOrNull(binding.inputDestination),
                 TRAVEL_MODE_CODES[binding.spinnerMode.getSelectedItemPosition()],
                 rule);
+    }
 
-        binding.btnSave.setEnabled(false);
-        Async.run(() -> {
-            try {
-                Response<ApiEnvelope<AlarmDto>> response =
-                        ApiClient.api(requireContext()).createAlarm(request).execute();
-                ApiEnvelope<?> body = response.body();
-                if (!response.isSuccessful() || body == null || !body.success) {
-                    String message = body != null && body.error != null && body.error.message != null
-                            ? body.error.message
-                            : ApiErrors.describe(response, getString(R.string.error_network));
-                    throw new IllegalStateException(message);
-                }
-                PlanSyncWorker.enqueue(requireContext());
-                Async.main(() -> {
-                    if (getActivity() != null) {
-                        getActivity().getOnBackPressedDispatcher().onBackPressed();
-                    }
-                });
-            } catch (Exception e) {
-                String message = e.getMessage() == null ? getString(R.string.error_network) : e.getMessage();
-                Async.main(() -> {
-                    if (binding != null) {
-                        binding.btnSave.setEnabled(true);
-                        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
-                    }
-                });
+    private interface AlarmIdCallback {
+        void onSuccess(String alarmId);
+    }
+
+    private interface ErrorCallback {
+        void onError(String message);
+    }
+
+    /** createAlarm 异步包装：成功后回调 onSuccess(alarmId)，失败回调 onError(message)。已在后台线程。 */
+    private void createAlarmThen(CreateAlarmRequest request, AlarmIdCallback onSuccess, ErrorCallback onError) {
+        try {
+            Response<ApiEnvelope<AlarmDto>> response =
+                    ApiClient.api(requireContext()).createAlarm(request).execute();
+            ApiEnvelope<AlarmDto> body = response.body();
+            if (!response.isSuccessful() || body == null || !body.success || body.data == null) {
+                String message = body != null && body.error != null && body.error.message != null
+                        ? body.error.message
+                        : ApiErrors.describe(response, getString(R.string.error_network));
+                onError.onError(message);
+                return;
+            }
+            onSuccess.onSuccess(body.data.id);
+        } catch (Exception e) {
+            onError.onError(e.getMessage() == null ? getString(R.string.error_network) : e.getMessage());
+        }
+    }
+
+    private void onSaveSuccess(String alarmId) {
+        PlanSyncWorker.enqueue(requireContext());
+        Async.main(() -> {
+            if (getActivity() != null) {
+                getActivity().getOnBackPressedDispatcher().onBackPressed();
             }
         });
+    }
+
+    private void onSaveError(String message) {
+        Async.main(() -> {
+            if (binding != null) {
+                binding.btnSave.setEnabled(true);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+
+    private void fetchAndShowPreview(String alarmId, Integer maxAdvanceMinutes) {
+        try {
+            Response<ApiEnvelope<PreviewPlanDto>> response =
+                    ApiClient.api(requireContext()).previewAlarm(alarmId, new PreviewRequest(maxAdvanceMinutes)).execute();
+            ApiEnvelope<PreviewPlanDto> body = response.body();
+            if (!response.isSuccessful() || body == null || !body.success || body.data == null) {
+                String message = body != null && body.error != null && body.error.message != null
+                        ? body.error.message
+                        : ApiErrors.describe(response, getString(R.string.error_network));
+                throw new IllegalStateException(message);
+            }
+            PreviewPlanDto plan = body.data;
+            Async.main(() -> showPreviewDialog(plan));
+        } catch (Exception e) {
+            String message = e.getMessage() == null ? getString(R.string.error_network) : e.getMessage();
+            Async.main(() -> {
+                if (binding != null) {
+                    binding.btnPreview.setEnabled(true);
+                    Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show();
+                }
+            });
+        }
+    }
+
+    private void showPreviewDialog(PreviewPlanDto plan) {
+        if (binding == null) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(getString(R.string.preview_baseline, hhmm(plan.baselineWakeAt))).append("\n");
+        sb.append(getString(R.string.preview_recommended, hhmm(plan.recommendedWakeAt))).append("\n\n");
+        int delta = plan.deltaMinutes;
+        String deltaText;
+        if (delta < 0) {
+            deltaText = getString(R.string.preview_delta_early, -delta);
+        } else if (delta > 0) {
+            deltaText = getString(R.string.preview_delta_late, delta);
+        } else {
+            deltaText = getString(R.string.preview_delta_zero);
+        }
+        sb.append(deltaText).append("\n\n");
+        sb.append(getString(R.string.preview_prob_before,
+                Math.round(plan.lateProbabilityBefore * 100))).append("\n");
+        sb.append(getString(R.string.preview_prob_after,
+                Math.round(plan.lateProbabilityAfter * 100))).append("\n");
+        sb.append(getString(R.string.preview_confidence,
+                Math.round(plan.confidence * 100))).append("\n");
+        if (plan.topFactors != null && !plan.topFactors.isEmpty()) {
+            StringBuilder factors = new StringBuilder();
+            for (int i = 0; i < plan.topFactors.size(); i++) {
+                if (i > 0) factors.append("、");
+                factors.append(plan.topFactors.get(i).label);
+            }
+            sb.append("\n").append(getString(R.string.preview_factors, factors.toString()));
+        }
+        if (plan.explanation != null && !plan.explanation.isEmpty()) {
+            sb.append("\n\n").append(plan.explanation);
+        }
+        new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.preview_title)
+                .setMessage(sb.toString())
+                .setPositiveButton(R.string.preview_close, null)
+                .setOnDismissListener(d -> {
+                    if (binding != null) {
+                        binding.btnPreview.setEnabled(true);
+                    }
+                })
+                .show();
+    }
+
+    private static String hhmm(String iso) {
+        if (iso == null || iso.isEmpty()) {
+            return "--:--";
+        }
+        try {
+            java.time.Instant instant = java.time.Instant.parse(iso);
+            return java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                    .withZone(java.time.ZoneId.systemDefault()).format(instant);
+        } catch (Exception e) {
+            return iso;
+        }
     }
 
     private String collectRecurrence() {

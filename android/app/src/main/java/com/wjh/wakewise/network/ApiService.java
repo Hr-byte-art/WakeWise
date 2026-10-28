@@ -14,6 +14,8 @@ import com.wjh.wakewise.network.Dtos.PlanViewDto;
 import com.wjh.wakewise.network.Dtos.RegisterRequest;
 import com.wjh.wakewise.network.Dtos.RevertRequest;
 import com.wjh.wakewise.network.Dtos.ToggleAlarmRequest;
+import com.wjh.wakewise.network.Dtos.PreviewPlanDto;
+import com.wjh.wakewise.network.Dtos.PreviewRequest;
 import com.wjh.wakewise.network.Dtos.UpdateCredentialRequest;
 import com.wjh.wakewise.network.Dtos.UpdateProfileRequest;
 import com.wjh.wakewise.network.Dtos.UserProfile;
@@ -51,6 +53,9 @@ public interface ApiService {
 
     @PATCH("alarms/{id}")
     Call<ApiEnvelope<AlarmDto>> updateAlarm(@Path("id") String alarmId, @Body ToggleAlarmRequest request);
+
+    @POST("alarms/{id}/preview")
+    Call<ApiEnvelope<PreviewPlanDto>> previewAlarm(@Path("id") String alarmId, @Body PreviewRequest request);
 
     @GET("morning/context")
     Call<ApiEnvelope<MorningContextDto>> morningContext();
