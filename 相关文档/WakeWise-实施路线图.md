@@ -183,28 +183,30 @@
 
 ## 已完成原子
 
-### ✅ P0-1 修复 `/alarms/{id}/preview` 端点（2026-09-07）
+### ✅ P0-1 修复 `/alarms/{id}/preview` 端点（2026-10-28）
 - 改动：`DecisionService.previewForUser` 新增 WAKE_AT 分支（基线=推荐，delta=0，KEEP_BASELINE）；`@Transactional` 改为 readOnly；撤回单测（推迟到 P4-4）。
-- 验证：`mvn -o compile` 通过；`mvn -o test` 4/4 通过。
+- 验证：后端 `mvn -q test` 57/57 通过（含 BYOK 签名对齐后新增用例）；Android `assembleDebug` BUILD SUCCESSFUL。
 
-### ✅ P0-2 `WAKE_AT` 也能产出 decision_history（2026-09-07）
+### ✅ P0-2 `WAKE_AT` 也能产出 decision_history（2026-10-28）
 - 改动：
-  1. `DecisionService.evaluateAndPropose` 拆出 WAKE_AT 路径：去掉"非 ARRIVE_BY 就 return null"，改为调新增的 private `evaluateWakeAt(alarm, user, trigger)`。
+  1. `DecisionService.evaluateAndPropose` 拆出 WAKE_AT 路径：去掉“非 ARRIVE_BY 就 return null”，改为调新增的 private `evaluateWakeAt(alarm, user, trigger)`。
   2. `evaluateWakeAt`：算下一次唤醒 + 查天气 + 生成解释 + 写 `DecisionHistory`（status=DISPATCHING, delta=0, reasonCode=KEEP_BASELINE, confidence 由天气质量推导） + 刷 `alarm.next_trigger_at`。
-  3. `NightlyPlanJob` 简化：去掉 `if (ARRIVE_BY) / else` 分支，统一调 `evaluateAndPropose`；删 `AlarmService` 依赖。
-- 验证：`mvn -o compile` 通过；`mvn -o test` 4/4 通过；`NightlyPlanJob` 字段数从 4 个减到 3 个。
-- 风险点：evaluateWakeAt 末尾的 `withPersistence(new WakePlan(...))` 写法绕开原 `withPersistence` 私有签名（多塞一个 status="DISPATCHING"），需后续 review 是否要重构。
+  3. `NightlyPlanJob` 简化：去掉 `if (ARRIVE_BY) / else` 分支，统一调 `evaluateAndPropose`；删 `AlarmService` 依赖（字段数 4 → 3）。
+- 验证：后端 `mvn -q test` 57/57 通过；Android `assembleDebug` BUILD SUCCESSFUL。
+- 风险点：
+  1. `evaluateWakeAt` 末尾 `withPersistence(new WakePlan(...))` 传的 `status` 字符串实际被忽略（`withPersistence` 用 `history.getStatus().name()`），传 `null` 更诚实，留待 review。
+  2. `AlarmService.update` 仍只对 `ARRIVE_BY` 调 `evaluateAndPropose`：`WAKE_AT` 在“改闹钟”路径只刷 `nextTriggerAt`、不写历史，与夜间任务的语义不一致，待收敛。
 
-### ✅ P0-3 Android 编辑页加"预估"按钮（2026-09-07）
-- **设计决策**（计划修订）：preview 按钮 = "保存并预览"，不另加 draft preview 端点。
-  - 原因：避免"未保存的草稿预览"导致后端 / 前端 / 错误码多套设计；MVP 演示时只创建一次闹钟就够。
+### ✅ P0-3 Android 编辑页加“预估”按钮（2026-10-28）
+- **设计决策**（计划修订）：preview 按钮 = “保存并预览”，不另加 draft preview 端点。
+  - 原因：避免“未保存的草稿预览”导致后端 / 前端 / 错误码多套设计；MVP 演示时只创建一次闹钟就够。
   - 代价：用户点 5 次 preview 会创建 5 个闹钟。已在 fragment 注释里说明，正式版应改为 draft preview。
   - draft preview 留待 P1 阶段（需要统一的草稿 / 错误码 / notification 三件套）。
 - 改动：
   1. `Dtos.java` 加 `PreviewRequest` / `PreviewFactorDto` / `PreviewPlanDto`。
   2. `ApiService.java` 加 `@POST("alarms/{id}/preview")` 端点 + import。
   3. `fragment_alarm_edit.xml` 在 `btn_save` 上方加 outlined-style `btn_preview`。
-  4. `strings.xml` 加 11 个 preview_* 文案（baseline / recommended / delta / prob / confidence / factors / close）。
+  4. `strings.xml` 加 12 个 `preview_*` 文案（标题 / 基线 / 推荐 / 提前量 / 迟到概率 / 置信度 / 因素 / 关闭等）。
   5. `AlarmEditFragment.java`：
      - 抽 `buildRequest()` 共享表单校验
      - 抽 `createAlarmThen(request, onSuccess, onError)` 异步包装（`Async.run` 内）
@@ -212,7 +214,5 @@
      - `preview()` = build + createAlarmThen(success→fetchAndShowPreview, error→toast)
      - `fetchAndShowPreview(alarmId, maxAdvanceMinutes)` 调 preview API，失败 toast
      - `showPreviewDialog(plan)` 用 AlertDialog 展示 wakeAt / delta / prob / confidence / factors / explanation
-- 验证：本地无 Android Studio / Gradle，无法跑 `./gradlew assembleDebug`。**仅完成静态代码审 + 后端编译过 + 4/4 单测过**。需要用户在 Android Studio 打开同步确认。
-- 风险点：
-  1. preview 按钮 = save 后预览，可能产生重复 alarm。已在 fragment 注释。
-  2. 没有 Gradle build 验证，纯粹肉眼审。需要你 Android Studio 打开后第一次同步看一下。
+- 验证：`assembleDebug` BUILD SUCCESSFUL（本机 Gradle Wrapper 可正常构建，此前“本地无 Gradle”的判断作废）；同时跑通后端 `mvn -q test` 57/57。
+- 风险点：preview 按钮 = save 后预览，可能产生重复 alarm（已在 fragment 注释）；`showPreviewDialog` 未展示 `requiresConfirmation`（对预览无影响）。

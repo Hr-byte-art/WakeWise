@@ -43,6 +43,14 @@
 
 ## 三、已完成
 
+- [x] **路线图 P0 三项：演示闭环补齐**（2026-10-28，后端 `938fef7` + Android `5989758` + 文档 `05678ad`）
+  - **P0-1** `POST /alarms/{id}/preview` 补 `DecisionService.previewForUser`（此前 Controller 调的方法根本不存在，接口必 500）：ARRIVE_BY 走 `compute()` 全链路；WAKE_AT 返回 `baseline == recommended`、`delta=0`、`KEEP_BASELINE`，不写库不发通知，事务标 `readOnly`。
+  - **P0-2** `WAKE_AT` 也能产出 `decision_history`：`evaluateAndPropose` 去掉"非 ARRIVE_BY 直接 return null"，改走新增 private `evaluateWakeAt`（status=DISPATCHING、delta=0、KEEP_BASELINE、confidence 由天气质量推导、解释引用天气与通勤摘要），同时刷 `alarm.next_trigger_at`。`NightlyPlanJob` 随之去掉 ARRIVE_BY 双轨与 `AlarmService` 依赖（字段 4 → 3），夜间任务对两类闹钟语义统一。
+  - **P0-3** Android 编辑页加"预估明早计划"按钮：`POST alarms/{id}/preview` 走通链路，底部弹窗展示 recommendedWakeAt / deltaMinutes / 迟到概率 / confidence / 因素归因 / explanation；抽 `buildRequest()` + `createAlarmThen()` 复用表单校验与建闹钟流程，保存逻辑未改。
+  - 验证：后端 `mvn -q test` 57/57 绿；Android `assembleDebug` BUILD SUCCESSFUL。**真实数据冒烟未跑**（需 MySQL 密码 + 真机/模拟器，见第一节）。
+  - 顺手修掉 BYOK 改造（`af862e4`/`e9411cb`）遗留的 3 处编译错误：`DecisionService` 两处 `explanationGenerator.generate(...)` 仍传 `userId`（签名已改传 `LlmEndpoint`），`AlarmEditFragment` 一处括号错位 + `StringBuilder` 未声明。这两端当时是**编译不过**的状态，本次一并修好。
+  - 遗留不一致（未处理，待收敛）：`AlarmService.update` 仍只对 ARRIVE_BY 调 `evaluateAndPropose`，WAKE_AT 走"改闹钟"路径时只刷 `nextTriggerAt`、不写历史，与夜间任务语义不一致；`evaluateWakeAt` 末尾 `new WakePlan(..., "DISPATCHING", ...)` 的 status 字符串被 `withPersistence` 忽略（实际取 `history.getStatus().name()`），传 `null` 更诚实。
+
 - [x] **贪睡时间从校准样本丢失的修复**（2026-10-27，`ecea2e8`）：代码走查发现贪睡后同 planId 重报 ALARM_FIRED 会覆盖 `triggered_at`（last-write），校准样本只算末次响铃到关闭、贪睡时长被挤掉，与"贪睡计入起床延迟"的建模语义相反。改为 first-write-wins，事件状态迁移收进 `WakeHistory.applyDeviceEvent` 纯方法并补 5 例回归测试（后端 18/18 绿）；运行时回归用例见上方第一节"贪睡语义回归"
 - [x] **路演文档对齐实现**（2026-10-27）：修正 Flutter→原生 Android、技术栈如实化（Spring AI/Redis/RabbitMQ 标规划）、四类目标→两类、四级→三级自动化、Quartz 单实例如实表述、Q5/Q6 问答对齐当前实现、演示故事线全部改为当前可演示步骤；文档头新增"实现状态速览"表，面试前先看那张表
 - [x] **行为学习一期**：起床延迟 SHRINK_V1 校准 + 响铃页晨间简报 + 出门打卡（2026-10-27，`87d3858`→`502f1a3` 共 5 提交，已推 origin/main）

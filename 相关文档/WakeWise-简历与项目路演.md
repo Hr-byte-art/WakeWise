@@ -14,6 +14,8 @@
 | 日历接入（一期） | ✅ 已实现 | Android CalendarProvider 导入明日首个非全天事件自动填目标到达时间/地点（纯端侧、运行时授权、失败只提示）；多日历选择/后台自动读取为规划 |
 | 真实交通 ETA（一期） | ✅ 已实现 | 高德 Web 服务：地址文本→地理编码缓存坐标→按方式路径规划取真实耗时（2h 缓存），`AMAP_KEY` 未配/失败逐字节回落手填分钟；modelVersion 标 `+ETA` 可审计 |
 | 外部服务凭据 BYOK（设置页自带高德 key / LLM 三项） | ✅ 已实现 | V5 per-user 凭据表，api_key AES-256-GCM 加密落库、只写不回显明文；解析链「显式禁用 ＞ 用户级 ＞ 服务端默认 ＞ 关闭」且解析永不抛（红线）；凭据连通性校验、多凭据轮换为规划 |
+| 明早计划可预览（`POST /alarms/{id}/preview`） | ✅ 已实现 | "目标到达"走完整分位数链路；"固定时间"如实返回基线即推荐（delta=0、KEEP_BASELINE），只读不写库、不发通知；Android 编辑页有"预估明早计划"按钮（保存后预览，非草稿预览） |
+| `WAKE_AT` 决策留痕 | ✅ 已实现 | 夜间任务对两类闹钟语义统一：固定时间闹钟同样写 `decision_history`（DISPATCHING / delta=0 / KEEP_BASELINE）+ 刷 `next_trigger_at`，不再只有"目标到达"才有历史记录 |
 | Morning Agent | ⚠️ 部分 | 当前为 Quartz 夜间任务（22:00）+ 自动布防边界判定；无 Spring AI、无工具调用 |
 | 技术栈 | ⚠️ 如实表述 | Java 21 + Spring Boot + MySQL(Flyway) + JWT + Quartz + OpenAI 兼容 LLM 端点（解释文案）+ **原生 Android**(Java/Room/WorkManager)；Spring AI、Redis、RabbitMQ、Docker 为规划 |
 | MCP 工具沙箱、自然语言提案 | ❌ 规划 | 决策引擎与解释层均已留端口 |
