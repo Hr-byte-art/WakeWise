@@ -230,11 +230,13 @@ public final class Dtos {
         public CalibrationDto calibration;
     }
 
-    /** 行为学习校准信息（后端样本不足时为 null）。 */
+    /** 行为学习校准信息（后端样本不足时为 null）；prep 两项为准备时长比率校准（可空）。 */
     public static class CalibrationDto {
         public int sampleCount;
         public double estimateMinutes;
         public String algorithmVersion;
+        public Integer prepSampleCount;
+        public Double prepRatioP50;
     }
 
     public static class WakePlanDto {

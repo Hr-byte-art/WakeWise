@@ -27,6 +27,7 @@ import com.wjh.wakewise.sync.PlanSyncWorker;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 import retrofit2.Response;
 
@@ -139,11 +140,26 @@ public class HomeFragment extends Fragment {
             binding.txtTraffic.setVisibility(View.GONE);
         }
 
-        // 行为学习校准提示（后端样本足够时才有）
-        if (context.calibration != null && context.calibration.sampleCount >= 5) {
+        // 行为学习校准提示（后端样本足够时才有；起床延迟与准备时长任一达标即显示）
+        boolean wakeCalibrated = context.calibration != null && context.calibration.sampleCount >= 5;
+        boolean prepCalibrated = context.calibration != null
+                && context.calibration.prepSampleCount != null
+                && context.calibration.prepSampleCount >= 5;
+        if (wakeCalibrated || prepCalibrated) {
+            StringBuilder hint = new StringBuilder();
+            if (wakeCalibrated) {
+                hint.append(getString(R.string.home_calibrated, context.calibration.sampleCount));
+            }
+            if (prepCalibrated) {
+                if (hint.length() > 0) {
+                    hint.append('\n');
+                }
+                hint.append(getString(R.string.home_prep_calibrated,
+                        context.calibration.prepSampleCount,
+                        String.format(Locale.US, "%.1f", context.calibration.prepRatioP50)));
+            }
             binding.txtCalibration.setVisibility(View.VISIBLE);
-            binding.txtCalibration.setText(
-                    getString(R.string.home_calibrated, context.calibration.sampleCount));
+            binding.txtCalibration.setText(hint);
         } else {
             binding.txtCalibration.setVisibility(View.GONE);
         }

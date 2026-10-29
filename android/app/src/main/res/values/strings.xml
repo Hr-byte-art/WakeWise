@@ -35,6 +35,7 @@
     <string name="btn_revert">恢复原计划</string>
     <string name="offline_hint">云端暂不可达 · 已下发的本地闹钟仍会正常响铃</string>
     <string name="home_calibrated">已根据最近 %1$d 次起床记录校准</string>
+    <string name="home_prep_calibrated">准备时长按最近 %1$d 次出门校准（约设定的 %2$s 倍）</string>
 
     <!-- 响铃页简报 -->
     <string name="ring_brief_loading">简报同步中…</string>
