@@ -8,9 +8,9 @@ import com.wjh.wakewise.data.OutboxEvent;
 import com.wjh.wakewise.network.ApiClient;
 import com.wjh.wakewise.network.Dtos.ApiEnvelope;
 import com.wjh.wakewise.network.Dtos.DeviceEventRequest;
+import com.wjh.wakewise.network.ServerClock;
 
 import java.io.IOException;
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,7 +24,8 @@ public final class EventReporter {
 
     public static void report(Context context, String planId, String type) {
         String eventId = "evt-" + UUID.randomUUID();
-        String occurredAt = Instant.now().toString();
+        // 用服务端时钟校正后的时刻上报（未学习过偏移时即设备本地时间），降低墙钟漂移污染
+        String occurredAt = ServerClock.now(context).toString();
         Async.run(() -> {
             try {
                 Response<ApiEnvelope<Void>> response = ApiClient.api(context)

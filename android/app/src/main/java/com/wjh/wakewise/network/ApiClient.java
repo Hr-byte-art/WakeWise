@@ -25,6 +25,7 @@ public final class ApiClient {
                     SessionManager session = new SessionManager(context.getApplicationContext());
                     HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
                     logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
+                    final Context appContext = context.getApplicationContext();
                     OkHttpClient client = new OkHttpClient.Builder()
                             .addInterceptor(chain -> {
                                 String token = session.getToken();
@@ -34,6 +35,17 @@ public final class ApiClient {
                                             .build());
                                 }
                                 return chain.proceed(chain.request());
+                            })
+                            .addInterceptor(chain -> {
+                                okhttp3.Response response = chain.proceed(chain.request());
+                                // 时钟偏差学习是增强链路：任何异常静默，绝不阻塞请求
+                                try {
+                                    if (response.isSuccessful()) {
+                                        ServerClock.learn(appContext, response.header("Date"));
+                                    }
+                                } catch (Exception ignored) {
+                                }
+                                return response;
                             })
                             .addInterceptor(logging)
                             .connectTimeout(10, TimeUnit.SECONDS)
