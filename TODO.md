@@ -10,7 +10,7 @@
 
 ### 后端（需要本地 MySQL 8 + JDK 21）
 
-- [ ] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1~V4 无报错
+- [ ] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1~V5 无报错
 - [ ] **真实 ETA 冒烟**（`e9c2aed` 一期实装）：`AMAP_KEY=<key>` 起后端 → PATCH /auth/me 设家址 → 建 ARRIVE_BY 闹钟（真实目的地）→ evaluate 后 modelVersion 含 `+ETA`、morning/context traffic 的 etaSource=AMAP 且分钟为真实值；不配 key 重启 → 回落手填分钟、traffic.etaSource 为 null、无报错
 - [ ] **eventId 全局去重**（`57ea72c` V3 实装）：同一 eventId 连发两次 ALARM_SNOOZED → `SELECT snooze_count FROM wake_history WHERE plan_id=...` 只计 1 次，两次请求均返回成功
 - [ ] **造历史触发校准**：开 doc.html（`http://localhost:8080/doc.html`，Authorize 填登录 JWT）→ 注册（城市"北京"）→ 建 ARRIVE_BY 闹钟（08:45 / prep 30 / commute 40 / maxAdvance 30）→ 循环 6 轮：`POST /decisions/evaluate` 拿新 planId → 对每个 planId 发两条 device-events：ALARM_FIRED（如 `22:45:00Z`）+ ALARM_DISMISSED（依次延迟 3/5/6/7/9/12 分钟，occurredAt 全 UTC 且必须是过去时刻——消毒器会把未来时刻夹到 now+2min）
