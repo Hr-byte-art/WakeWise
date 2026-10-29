@@ -15,6 +15,7 @@ import com.wjh.wakewise.domain.behavior.BehaviorLearningService;
 import com.wjh.wakewise.domain.decision.DecisionHistory.PlanStatus;
 import com.wjh.wakewise.domain.history.DeviceEvent;
 import com.wjh.wakewise.domain.history.DeviceEventRepository;
+import com.wjh.wakewise.domain.history.OccurredAtSanitizer;
 import com.wjh.wakewise.domain.history.WakeHistory;
 import com.wjh.wakewise.domain.history.WakeHistoryRepository;
 import com.wjh.wakewise.domain.notification.NotificationService;
@@ -31,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -63,6 +65,8 @@ public class DecisionService {
     private final ObjectMapper objectMapper;
 
     private final int autoArmMaxAdvance;
+    private final Duration eventMaxFutureSkew;
+    private final Duration eventPastMargin;
 
     public DecisionService(DecisionHistoryRepository decisionRepository,
                            AlarmRepository alarmRepository,
@@ -77,7 +81,9 @@ public class DecisionService {
                            ExplanationGenerator explanationGenerator,
                            NotificationService notificationService,
                            ObjectMapper objectMapper,
-                           @Value("${wakewise.decision.auto-arm-max-advance-minutes:30}") int autoArmMaxAdvance) {
+                           @Value("${wakewise.decision.auto-arm-max-advance-minutes:30}") int autoArmMaxAdvance,
+                           @Value("${wakewise.events.max-future-skew-minutes:2}") int eventMaxFutureSkewMinutes,
+                           @Value("${wakewise.events.past-margin-minutes:1}") int eventPastMarginMinutes) {
         this.decisionRepository = decisionRepository;
         this.alarmRepository = alarmRepository;
         this.ruleRepository = ruleRepository;
@@ -92,6 +98,8 @@ public class DecisionService {
         this.notificationService = notificationService;
         this.objectMapper = objectMapper;
         this.autoArmMaxAdvance = autoArmMaxAdvance;
+        this.eventMaxFutureSkew = Duration.ofMinutes(eventMaxFutureSkewMinutes);
+        this.eventPastMargin = Duration.ofMinutes(eventPastMarginMinutes);
     }
 
     // ------------------------------------------------------------------ 评估
@@ -308,9 +316,16 @@ public class DecisionService {
                     // save 返回托管实例，保证后续字段修改能被 dirty-check 捕获
                     return wakeHistoryRepository.save(created);
                 });
-        Instant occurredAt = request.occurredAt() == null || request.occurredAt().isBlank()
-                ? Instant.now()
-                : Instant.parse(request.occurredAt());
+        // occurredAt 消毒：客户端时钟不可信，夹进 [计划创建-1min, now+2min]；空/非法兜底 now 绝不拒收
+        OccurredAtSanitizer.Result sanitized = OccurredAtSanitizer.sanitize(request.occurredAt(),
+                history.getCreatedAt(), Instant.now(), eventMaxFutureSkew, eventPastMargin);
+        if (sanitized.fellBackToNow() || sanitized.clampedToFloor() || sanitized.clampedToCeiling()) {
+            log.warn("Device event time sanitized: planId={}, type={}, raw={}, result={}, fellBackToNow={}, "
+                            + "clampedToFloor={}, clampedToCeiling={}",
+                    request.planId(), request.type(), request.occurredAt(), sanitized.sanitized(),
+                    sanitized.fellBackToNow(), sanitized.clampedToFloor(), sanitized.clampedToCeiling());
+        }
+        Instant occurredAt = sanitized.sanitized();
         // 字段级幂等的状态迁移收在 WakeHistory.applyDeviceEvent（纯方法可单测）：
         // ALARM_FIRED 保首次响铃（贪睡重报不覆盖），USER_LEFT_HOME 只记第一次出门时刻
         switch (request.type()) {

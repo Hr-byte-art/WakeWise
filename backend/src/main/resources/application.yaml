@@ -47,6 +47,11 @@ wakewise:
     safety-buffer-minutes-conservative: 8
     safety-buffer-minutes-sleep-first: 3
     auto-arm-max-advance-minutes: 30
+  events:
+    # 设备事件 occurredAt 消毒：客户端时钟不可信，夹取到 [计划创建-1min, now+2min]，
+    # 解析失败兜底 now——绝不拒收（Retrofit 非 2xx 抛 IOException 会让 outbox 无限重试）
+    max-future-skew-minutes: 2
+    past-margin-minutes: 1
   behavior:
     # 起床延迟校准（SHRINK_V1）：样本不足 min-samples 时保持固定先验 4/8 分钟
     min-samples: 5
