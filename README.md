@@ -33,7 +33,7 @@ WakeWise/
 │       └── domain/
 │           ├── user/        # 注册/登录
 │           ├── alarm/       # 闹钟 CRUD + 规则
-│           ├── behavior/    # 行为学习（起床延迟 SHRINK_V1 校准）
+│           ├── behavior/    # 行为学习（起床延迟 SHRINK_V1 + 准备时长比率 PREP_SHRINK_V1 校准）
 │           ├── weather/     # Open-Meteo 客户端 + 缓存降级
 │           ├── travel/      # 高德地理编码/路径规划 + ETA 缓存降级
 │           ├── decision/    # 分位数决策引擎 + 计划状态机 + 设备同步
@@ -109,7 +109,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
   → 用户确认（L2 且高置信度可自动）→ DISPATCHING
   → 客户端 GET /device-plans/pending → 端侧精确调度 → 先建新后删旧 → POST ack → ARMED
   → 响铃/关闭/贪睡 → POST /device-events（失败落 outbox 补报）
-  → 关闭后可"出门打卡"（USER_LEFT_HOME）→ 为准备时长校准积累样本（一期只积累不消费）
+  → 关闭后可"出门打卡"（USER_LEFT_HOME）→ 触发准备时长比率校准（PREP_SHRINK_V1）
 ```
 
 - 新计划未 ACK 前，旧计划永不下线；同闹钟 ACK 成功后旧计划才标记 SUPERSEDED。
@@ -141,7 +141,7 @@ CandidateWakeTime = D − Quantile(RequiredTime, q)
 
 - iOS：客户端为原生 Android，暂无 iOS 版本（旧 Flutter 端可从 git 历史恢复参考）。
 - 交通 ETA（一期已实装）：高德 Web 服务 API——常驻地址（家）与闹钟目的地做地理编码缓存坐标，按出行方式路径规划取真实耗时替换手填通勤分钟（2 小时缓存，`AMAP_KEY` 环境变量配置，未配置/失败回落手填）；modelVersion 标注 `+ETA`，晨间简报 traffic 带 `etaSource`。多方式组合策略与实时路况为规划。
-- 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备/通勤时长仍用用户设置值；出门事件（USER_LEFT_HOME）仅积累数据、暂不参与决策；`occurredAt` 信任客户端时钟，偏差治理留待后续。
+- 行为学习（第一期已实装）：起床延迟先验按 `wake_history` 真实数据校准（SHRINK_V1 收缩估计，≥5 个有效样本生效，首页显示"已根据最近 N 次起床记录校准"）；准备时长按出门样本（`leftHomeAt - dismissedAt`）比率校准（PREP_SHRINK_V1：实际准备 ÷ 用户设定，收缩向"信任设置"的 1.0，≥5 个有效样本生效，modelVersion 标注 `+PREP(n=N)`，首页显示约设定的几倍）；通勤时长仍用用户设置值（真实 ETA 生效时除外）；设备事件 `occurredAt` 已做双层时钟偏差治理——端侧从响应 Date 头学习服务器偏移并校正上报，服务端夹取到 [计划创建−1min, now+2min]、解析失败兜底为接收时刻（绝不拒收，保证 outbox 能排空）。
 - LLM 解释文案：已实装 OpenAI 兼容可配置客户端（`LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL` 三项留空即纯模板、零感知）；自研轻量 RestClient 客户端而非 Spring AI（Spring AI 1.0 官方仅支持 Boot 3.4+，本项目钉在 Boot 3.3，接口留有替换位）。
 - 外部服务凭据（BYOK，已实装）：App 设置页可自带高德 key 与 LLM 三项（V5 `user_credential` 表，api_key AES-256-GCM 加密落库、接口只写不回显明文），解析链「用户显式禁用 ＞ 用户级 ＞ 服务端默认（环境变量）＞ 关闭」，且凭据解析永不抛、失败回落服务端默认，不影响闹钟主链路；`traffic_cache` 路径快照跨用户共享（ETA 是路线属性，省配额，有意决策）；`BYOK_ENC_KEY` 生产必须环境变量注入强随机值，换钥后旧密文自动失效回落、需用户重存。凭据连通性校验、多凭据轮换为规划。
 - 日历接入（一期已实装）：闹钟编辑页可"从日历导入"明日首个非全天日历事件，自动填目标到达时间（名称/地点为空时一并带上；运行时申请 READ_CALENDAR，拒绝或无日程只提示、不影响手动建闹钟）；多日历账户选择、后台自动读取为规划。
