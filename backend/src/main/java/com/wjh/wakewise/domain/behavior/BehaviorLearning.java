@@ -20,6 +20,8 @@ public class BehaviorLearning extends BaseEntity {
 
     public static final String SEGMENT_ALL = "ALL";
     public static final String FEATURE_WAKE_LATENCY = "WAKE_LATENCY";
+    /** 准备时长比率（PREP_SHRINK_V1，V1 建表注释已预留该枚举）。 */
+    public static final String FEATURE_PREP_DURATION = "PREP_DURATION";
 
     @Id
     @Column(length = 26)

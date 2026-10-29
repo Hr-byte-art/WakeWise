@@ -15,4 +15,8 @@ public interface WakeHistoryRepository extends JpaRepository<WakeHistory, String
     /** 最近的有效起床样本（已响铃且已关闭），行为学习校准用；固定取 50 条，max-samples 需 <= 50。 */
     List<WakeHistory> findTop50ByUserIdAndTriggeredAtIsNotNullAndDismissedAtIsNotNullOrderByScheduledAtDesc(
             String userId);
+
+    /** 最近的有效准备时长样本（已关闭且已出门），准备时长校准用；固定取 50 条，prep-max-samples 需 <= 50。 */
+    List<WakeHistory> findTop50ByUserIdAndDismissedAtIsNotNullAndLeftHomeAtIsNotNullOrderByScheduledAtDesc(
+            String userId);
 }

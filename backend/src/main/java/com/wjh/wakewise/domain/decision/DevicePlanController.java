@@ -44,13 +44,20 @@ public class DevicePlanController {
     public ApiResponse<Void> recordEvent(@RequestBody DecisionDtos.DeviceEventRequest request) {
         String userId = AuthContext.currentUserId();
         decisionService.recordDeviceEvent(userId, request);
-        // 关闭事件落库后重算起床延迟校准。放在事件事务提交之后触发：
-        // 校准是增强链路，失败只记日志，绝不把已提交的事件拖回滚（"AI 可以失败，闹钟不能"）。
+        // 关闭事件落库后重算起床延迟校准；出门事件落库后重算准备时长校准。
+        // 放在事件事务提交之后触发：校准是增强链路，失败只记日志，
+        // 绝不把已提交的事件拖回滚（"AI 可以失败，闹钟不能"）。
         if ("ALARM_DISMISSED".equals(request.type())) {
             try {
                 behaviorLearningService.recalibrateWakeLatency(userId);
             } catch (Exception e) {
                 log.warn("Wake latency recalibration failed after dismiss: user={}", userId, e);
+            }
+        } else if ("USER_LEFT_HOME".equals(request.type())) {
+            try {
+                behaviorLearningService.recalibratePrepDuration(userId);
+            } catch (Exception e) {
+                log.warn("Prep duration recalibration failed after left-home: user={}", userId, e);
             }
         }
         return ApiResponse.ok();

@@ -34,12 +34,20 @@ public class DecisionEngine {
     public static final double WAKE_LATENCY_P90_MIN = 8.0;
 
     /**
-     * 个人行为先验：起床延迟 P50/P90（分钟）与校准样本数（0 即未校准，用固定先验）。
+     * 个人行为先验：起床延迟 P50/P90（分钟）与校准样本数（0 即未校准，用固定先验）；
+     * 准备时长用"实际/设定"的比率 P50/P90 与样本数（比率 1.0 / 1.25 即未校准，与固定系数等价）。
      * 由 BehaviorLearningService 从 wake_history 真实样本校准后注入。
      */
-    public record BehavioralPriors(double wakeLatencyP50Min, double wakeLatencyP90Min, int sampleCount) {
+    public record BehavioralPriors(double wakeLatencyP50Min, double wakeLatencyP90Min, int sampleCount,
+                                   double prepRatioP50, double prepRatioP90, int prepSampleCount) {
         public static final BehavioralPriors DEFAULTS =
-                new BehavioralPriors(WAKE_LATENCY_P50_MIN, WAKE_LATENCY_P90_MIN, 0);
+                new BehavioralPriors(WAKE_LATENCY_P50_MIN, WAKE_LATENCY_P90_MIN, 0,
+                        1.0, PREP_P90_FACTOR, 0);
+
+        /** 旧三参签名兼容：prep 未校准（比率 1.0 + 固定尾部系数 1.25），既有调用点零改动。 */
+        public BehavioralPriors(double wakeLatencyP50Min, double wakeLatencyP90Min, int sampleCount) {
+            this(wakeLatencyP50Min, wakeLatencyP90Min, sampleCount, 1.0, PREP_P90_FACTOR, 0);
+        }
     }
 
     private static final double PREP_P90_FACTOR = 1.25;
@@ -102,8 +110,9 @@ public class DecisionEngine {
         double wakeSigma = (priors.wakeLatencyP90Min() - priors.wakeLatencyP50Min()) / NORMAL_P90_Z;
         double wakeQuantile = priors.wakeLatencyP50Min() + z * wakeSigma;
 
-        double prepP50 = Math.max(0, rule.getPrepDurationMin());
-        double prepSigma = prepP50 * (PREP_P90_FACTOR - 1.0) / NORMAL_P90_Z;
+        // 准备时长 = 用户设定 × 校准比率（未校准比率 1.0、尾部系数 1.25，与固定系数时代逐字节一致）
+        double prepP50 = Math.max(0, rule.getPrepDurationMin()) * priors.prepRatioP50();
+        double prepSigma = prepP50 * (priors.prepRatioP90() - priors.prepRatioP50()) / NORMAL_P90_Z;
         double prepQuantile = prepP50 + z * prepSigma;
 
         double travelP50 = realTravel
@@ -196,6 +205,9 @@ public class DecisionEngine {
         if (priors.sampleCount() > 0) {
             modelVersion += "+CAL(n=" + priors.sampleCount() + ")";
         }
+        if (priors.prepSampleCount() > 0) {
+            modelVersion += "+PREP(n=" + priors.prepSampleCount() + ")";
+        }
         if (realTravel) {
             modelVersion += "+ETA";
         }
@@ -220,7 +232,8 @@ public class DecisionEngine {
         double travelP50 = travelP50Minutes != null
                 ? Math.max(0, travelP50Minutes)
                 : Math.max(0, rule.getCommuteMinutes());
-        double requiredMean = priors.wakeLatencyP50Min() + Math.max(0, rule.getPrepDurationMin()) + travelP50;
+        double requiredMean = priors.wakeLatencyP50Min()
+                + Math.max(0, rule.getPrepDurationMin()) * priors.prepRatioP50() + travelP50;
         return targetArrivalAt.minus((long) Math.ceil(requiredMean), ChronoUnit.MINUTES);
     }
 
@@ -230,7 +243,7 @@ public class DecisionEngine {
     }
 
     public Instant leaveBy(AlarmRule rule, Instant recommendedWakeAt, BehavioralPriors priors) {
-        double prepP50 = Math.max(0, rule.getPrepDurationMin());
+        double prepP50 = Math.max(0, rule.getPrepDurationMin()) * priors.prepRatioP50();
         long minutes = (long) Math.ceil(priors.wakeLatencyP90Min() + prepP50);
         return recommendedWakeAt.plus(minutes, ChronoUnit.MINUTES);
     }

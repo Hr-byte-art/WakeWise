@@ -205,4 +205,81 @@ class DecisionEngineTest {
         Instant real = engine.baselineWakeAt(rule, target, DecisionEngine.BehavioralPriors.DEFAULTS, 25);
         assertThat(ChronoUnit.MINUTES.between(manual, real)).isEqualTo(15);
     }
+
+    // ------------------------------------------------------------------ 准备时长比率校准
+
+    @Test
+    void defaultPrepRatiosProduceIdenticalOutput() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        AlarmRule rule = rule(40);
+        // 显式默认比率（1.0 / 1.25）与未校准先验必须逐字节一致：冷启动对老用户零感知
+        WakePlan defaultSixArg = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 0, 1.0, 1.25, 0));
+        WakePlan defaults = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null);
+        WakePlan noPriors = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null,
+                DecisionEngine.BehavioralPriors.DEFAULTS);
+
+        assertThat(defaultSixArg.baselineWakeAt()).isEqualTo(defaults.baselineWakeAt());
+        assertThat(defaultSixArg.recommendedWakeAt()).isEqualTo(defaults.recommendedWakeAt());
+        assertThat(defaultSixArg.modelVersion()).isEqualTo(defaults.modelVersion());
+        assertThat(defaultSixArg.lateProbabilityAfter()).isEqualTo(defaults.lateProbabilityAfter());
+        assertThat(defaultSixArg.riskScore()).isEqualTo(defaults.riskScore());
+        assertThat(defaultSixArg.confidence()).isEqualTo(defaults.confidence());
+        assertThat(noPriors.recommendedWakeAt()).isEqualTo(defaults.recommendedWakeAt());
+        assertThat(noPriors.baselineWakeAt()).isEqualTo(defaults.baselineWakeAt());
+    }
+
+    @Test
+    void calibratedPrepRatioShiftsBaselineEarlier() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        AlarmRule rule = rule(40); // 设定准备 30 分钟
+        // 比率 2.0：实际准备被认为是设定的两倍，基准唤醒应早 30 分钟
+        DecisionEngine.BehavioralPriors slowPrep = new DecisionEngine.BehavioralPriors(4, 8, 0, 2.0, 2.25, 6);
+
+        Instant defaultBaseline = engine.baselineWakeAt(rule, target);
+        Instant calibratedBaseline = engine.baselineWakeAt(rule, target, slowPrep);
+        assertThat(ChronoUnit.MINUTES.between(calibratedBaseline, defaultBaseline)).isEqualTo(30);
+
+        WakePlan defaultPlan = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null);
+        WakePlan calibrated = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule, user(), clear, target, null,
+                slowPrep);
+        assertThat(calibrated.recommendedWakeAt()).isBeforeOrEqualTo(defaultPlan.recommendedWakeAt());
+    }
+
+    @Test
+    void modelVersionAnnotatesPrepCalibration() {
+        WeatherRisk clear = new WeatherRisk(true, WeatherRisk.LEVEL_NONE, 0.02, 0, 26, 0, null, 0.95);
+        WakePlan calibrated = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 6, 1.0, 1.25, 5));
+        WakePlan withEta = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 6, 1.0, 1.25, 5), new TravelTime(true, 40, 0.90));
+        // 旧三参签名不标 +PREP：既有锚定回归
+        WakePlan wakeOnly = engine.evaluate(alarm(Alarm.TravelMode.TRANSIT), rule(40), user(), clear, target, null,
+                new DecisionEngine.BehavioralPriors(4, 8, 12));
+
+        assertThat(calibrated.modelVersion()).isEqualTo("QUANTILE_V1+CAL(n=6)+PREP(n=5)");
+        assertThat(withEta.modelVersion()).isEqualTo("QUANTILE_V1+CAL(n=6)+PREP(n=5)+ETA");
+        assertThat(wakeOnly.modelVersion()).isEqualTo("QUANTILE_V1+CAL(n=12)");
+    }
+
+    @Test
+    void leaveByUsesCalibratedPrepRatio() {
+        AlarmRule rule = rule(40); // 设定准备 30 分钟
+        Instant wake = Instant.parse("2026-08-03T23:00:00Z");
+        // 比率 1.2：出门时间应比默认（8 + 30）晚 ceil(30 × 0.2) = 6 分钟
+        Instant defaultLeave = engine.leaveBy(rule, wake);
+        Instant calibratedLeave = engine.leaveBy(rule, wake,
+                new DecisionEngine.BehavioralPriors(4, 8, 0, 1.2, 1.45, 6));
+        assertThat(ChronoUnit.MINUTES.between(defaultLeave, calibratedLeave)).isEqualTo(6);
+    }
+
+    @Test
+    void baselineWakeAtUsesCalibratedPrepRatio() {
+        AlarmRule rule = rule(40);
+        DecisionEngine.BehavioralPriors doublePrep = new DecisionEngine.BehavioralPriors(4, 8, 0, 2.0, 2.25, 6);
+        // 独立方法 baselineWakeAt 与 evaluate 内部基准同口径：prep 校准一致生效
+        Instant manual = engine.baselineWakeAt(rule, target, DecisionEngine.BehavioralPriors.DEFAULTS);
+        Instant calibrated = engine.baselineWakeAt(rule, target, doublePrep);
+        assertThat(ChronoUnit.MINUTES.between(calibrated, manual)).isEqualTo(30);
+    }
 }

@@ -53,6 +53,11 @@ wakewise:
     shrinkage-k: 5
     max-samples: 30          # 需 <= 50（Repository 固定取最近 50 条）
     max-latency-minutes: 60  # 单条样本截断上限（开着闹钟人不在等病态样本）
+    # 准备时长校准（PREP_SHRINK_V1）：比率 = 实际准备/用户设定，收缩向先验 1.0（信任设置）
+    prep-min-samples: 5
+    prep-shrinkage-k: 5
+    prep-max-samples: 30     # 需 <= 50（Repository 固定取最近 50 条）
+    max-prep-minutes: 180    # 单条样本实际分钟截断上限（关了闹钟出门前干别的事）
   llm:
     # 解释文案 LLM 增强（OpenAI 兼容端点，用户可配；base-url/api-key/model 留空即不启用，纯模板文案）
     # base-url 给到 /v1 为止，常用示例：

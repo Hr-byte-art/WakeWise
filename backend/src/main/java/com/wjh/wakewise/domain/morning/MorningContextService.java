@@ -76,8 +76,9 @@ public class MorningContextService {
     public record EventView(String title, String startAt, String locationLabel) {
     }
 
-    /** 校准信息：null 表示尚未校准（样本不足或无记录）。 */
-    public record CalibrationView(Integer sampleCount, Double estimateMinutes, String algorithmVersion) {
+    /** 校准信息：null 表示尚未校准（样本不足或无记录）；prep 字段为准备时长比率校准（可空）。 */
+    public record CalibrationView(Integer sampleCount, Double estimateMinutes, String algorithmVersion,
+                                  Integer prepSampleCount, Double prepRatioP50) {
     }
 
     public record MorningContextView(String date, WakePlanView wakePlan, WeatherView weather,
@@ -193,7 +194,13 @@ public class MorningContextService {
                 eventTitle == null ? null : new EventView(eventTitle,
                         eventStart == null ? null : eventStart.toString(), eventLocation),
                 Instant.now().toString(),
-                priors.sampleCount() > 0 ? new CalibrationView(priors.sampleCount(),
-                        priors.wakeLatencyP50Min(), WakeLatencyEstimator.ALGORITHM_VERSION) : null);
+                priors.sampleCount() > 0 || priors.prepSampleCount() > 0
+                        ? new CalibrationView(
+                                priors.sampleCount() > 0 ? priors.sampleCount() : null,
+                                priors.sampleCount() > 0 ? priors.wakeLatencyP50Min() : null,
+                                priors.sampleCount() > 0 ? WakeLatencyEstimator.ALGORITHM_VERSION : null,
+                                priors.prepSampleCount() > 0 ? priors.prepSampleCount() : null,
+                                priors.prepSampleCount() > 0 ? priors.prepRatioP50() : null)
+                        : null);
     }
 }
