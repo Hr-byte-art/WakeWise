@@ -45,6 +45,12 @@ class AmapResponseParserTest {
 
         var driving = json("{\"status\":\"1\",\"route\":{\"paths\":[{\"distance\":9800,\"duration\":1450}]}}");
         assertThat(AmapResponseParser.extractPathsDuration(driving)).contains(1450);
+
+        // 高德真实响应：duration/distance 均为字符串数字（2026-10-30 真 key 冒烟发现）
+        var realShape = json("{\"status\":\"1\",\"info\":\"OK\",\"count\":\"1\",\"route\":{\"origin\":\"116.316,39.984\","
+                + "\"destination\":\"116.322,39.895\",\"taxi_cost\":\"38\","
+                + "\"paths\":[{\"distance\":\"12169\",\"duration\":\"1343\",\"strategy\":\"速度最快\"}]}}");
+        assertThat(AmapResponseParser.extractPathsDuration(realShape)).contains(1343);
     }
 
     @Test

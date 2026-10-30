@@ -50,9 +50,22 @@ public final class AmapResponseParser {
     }
 
     private static Optional<Integer> positiveInt(JsonNode node) {
-        if (node.isMissingNode() || !node.canConvertToInt() || node.asInt() <= 0) {
+        if (node.isMissingNode()) {
             return Optional.empty();
         }
-        return Optional.of(node.asInt());
+        // 高德真实响应里 duration 等字段是字符串数字（"1343"），测试 fixture 是数字——两种都要接
+        int value;
+        if (node.isTextual()) {
+            try {
+                value = Integer.parseInt(node.asText().trim());
+            } catch (NumberFormatException e) {
+                return Optional.empty();
+            }
+        } else if (node.canConvertToInt()) {
+            value = node.asInt();
+        } else {
+            return Optional.empty();
+        }
+        return value > 0 ? Optional.of(value) : Optional.empty();
     }
 }

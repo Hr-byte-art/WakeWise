@@ -6,20 +6,22 @@
 
 ## 一、待做：行为学习一期 · 端到端验证（优先）
 
-代码已推送（见"已完成"），但当时不在常用设备上，以下验证**全部未跑**。
+代码已推送（见"已完成"）。2026-10-30 后端部分已自动化验证通过（见下方勾选项）；剩余 ⚠️ 项需真 key / 真机。
 
 ### 后端（需要本地 MySQL 8 + JDK 21）
 
-- [ ] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1~V5 无报错
-- [ ] **真实 ETA 冒烟**（`e9c2aed` 一期实装）：`AMAP_KEY=<key>` 起后端 → PATCH /auth/me 设家址 → 建 ARRIVE_BY 闹钟（真实目的地）→ evaluate 后 modelVersion 含 `+ETA`、morning/context traffic 的 etaSource=AMAP 且分钟为真实值；不配 key 重启 → 回落手填分钟、traffic.etaSource 为 null、无报错
-- [ ] **eventId 全局去重**（`57ea72c` V3 实装）：同一 eventId 连发两次 ALARM_SNOOZED → `SELECT snooze_count FROM wake_history WHERE plan_id=...` 只计 1 次，两次请求均返回成功
-- [ ] **造历史触发校准**：开 doc.html（`http://localhost:8080/doc.html`，Authorize 填登录 JWT）→ 注册（城市"北京"）→ 建 ARRIVE_BY 闹钟（08:45 / prep 30 / commute 40 / maxAdvance 30）→ 循环 6 轮：`POST /decisions/evaluate` 拿新 planId → 对每个 planId 发两条 device-events：ALARM_FIRED（如 `22:45:00Z`）+ ALARM_DISMISSED（依次延迟 3/5/6/7/9/12 分钟，occurredAt 全 UTC 且必须是过去时刻——消毒器会把未来时刻夹到 now+2min）
-- [ ] **校准断言**：`SELECT * FROM behavior_learning` 出一行（sample_count=6、SHRINK_V1、estimate≈5.36）；`GET /morning/context` 返回 `calibration` 字段；再 evaluate 一次，新计划详情 modelVersion = `QUANTILE_V1+CAL(n=6)`；后端日志出现 `Wake latency calibrated`
-- [ ] **出门事件幂等**：同一 planId 连发两次 USER_LEFT_HOME（不同 eventId、同 occurredAt）→ `SELECT left_home_at FROM wake_history WHERE plan_id=...` 只记第一次
-- [ ] **贪睡语义回归**（`ecea2e8` 修复项）：同一 planId 依次发 ALARM_FIRED(t0) → ALARM_SNOOZED → ALARM_FIRED(t0+5min) → ALARM_DISMISSED(t0+12min) → `triggered_at` 应为 t0（首次响铃），校准样本延迟含贪睡 5 分钟
-- [ ] **BYOK 运行时冒烟**（`af862e4` 后端 + `e9411cb` Android 实装）：起后端 → knife4j `GET /me/external-services` 看默认状态（AMAP/LLM 按 `AMAP_KEY`/`LLM_*` 是否配置显示 SERVER 或 OFF）→ PUT 用户级高德 key（真 key）→ evaluate 的 modelVersion 含 `+ETA`、traffic.etaSource=AMAP → PUT `{disabled:true}` → evaluate 回落手填分钟且无报错 → GET 确认任何响应都无 api_key 明文；LLM 三项同理（配真端点看 LLM 文案、只填两项看 400 提示）；App 端统计页入口 → 设置页四态流转（继承→你的 key→禁用→恢复默认）
-- [ ] **准备时长校准端到端**（`c0d7b63` 后端 + `44a2529` Android 实装）：doc.html 造 ≥5 条同时含 ALARM_DISMISSED + USER_LEFT_HOME 的历史（出门距关闭 36/42/48/54/60 分钟，occurredAt 用过去时刻）→ `SELECT * FROM behavior_learning WHERE feature_key='PREP_DURATION'` 出一行（sample_count≥5、PREP_SHRINK_V1、estimate≈实际/设定比率）→ 再 evaluate 新计划 modelVersion 含 `+PREP(n=5)` → `GET /morning/context` 的 calibration 带 prepSampleCount/prepRatioP50 → App 首页出现"准备时长按最近 N 次出门校准（约设定的 X 倍）"
-- [ ] **occurredAt 消毒**（`6593cc8` 后端 + `c9ae1fd` Android 实装）：向 device-events 发 occurredAt=未来 1 小时 → 请求成功、`SELECT occurred_at FROM device_event WHERE event_id=...` 夹到 now+2min 且日志出 `Device event time sanitized`；发非法字符串 → 同样成功不 500、occurred_at≈接收时刻；App 端改系统时间 +10 分钟后成功发一次请求（学到 offset）→ 后续事件上报时刻应已被校正
+> 2026-10-30 用 `MYSQL_DB=wakewise_v2` 新库 + Python 脚本（`%TEMP%\ww_verify.py`）跑完一轮自动化验证，17/17 PASS + DB 断言全符合；样本时刻压在消毒窗口内（秒级延迟），数值与 SHRINK_V1/PREP_SHRINK_V1 公式逐位吻合。带 ⚠️ 的项仍需真 key / 真机补跑。
+
+- [x] **启动迁移验证**：先 `DROP DATABASE wakewise;`（或用 `MYSQL_DB=wakewise_v2`），再启动后端（记得带 `-s ~/Applications/apache-maven-3.9.16/conf/settings-shucheng.xml`），确认 Flyway 跑完 V1~V5 无报错（2026-10-30，`wakewise_v2` 新库 V1~V5 全过、4.5s 启动、Quartz 排班正常）
+- [x] **真实 ETA 冒烟**（`e9c2aed` 一期实装）：`AMAP_KEY=<key>` 起后端 → PATCH /auth/me 设家址 → 建 ARRIVE_BY 闹钟（真实目的地）→ evaluate 后 modelVersion 含 `+ETA`、morning/context traffic 的 etaSource=AMAP 且分钟为真实值；不配 key 重启 → 回落手填分钟、traffic.etaSource 为 null、无报错（2026-10-30 真key 走 BYOK 用户级路径：中关村→北京西站驾车 P50=22min/P90=35min 与直调高德吻合、traffic_cache 快照落库、禁用后回落无报错；**修复真 bug 一个**：高德真实响应 duration 是字符串数字，`positiveInt` 只认数值节点导致 ETA 静默失效——单测 fixture 误用数字类型，已修 + 补真实形状回归用例，78/78 绿。注意 morning/context 的 traffic 只统计"明天有闹钟"的场景，周五晚验证需 recurrence 含周六）
+- [x] **eventId 全局去重**（`57ea72c` V3 实装）：同一 eventId 连发两次 ALARM_SNOOZED → `SELECT snooze_count FROM wake_history WHERE plan_id=...` 只计 1 次，两次请求均返回成功（2026-10-30，两次均 success、`device_event` 无重复 event_id 行）
+- [x] **造历史触发校准**：开 doc.html（`http://localhost:8080/doc.html`，Authorize 填登录 JWT）→ 注册（城市"北京"）→ 建 ARRIVE_BY 闹钟（08:45 / prep 30 / commute 40 / maxAdvance 30）→ 循环 6 轮：`POST /decisions/evaluate` 拿新 planId → 对每个 planId 发两条 device-events：ALARM_FIRED（如 `22:45:00Z`）+ ALARM_DISMISSED（依次延迟 3/5/6/7/9/12 分钟，occurredAt 全 UTC 且必须是过去时刻——消毒器会把未来时刻夹到 now+2min）（2026-10-30 脚本化跑通；注意原文档里"过去几小时"的时刻会被消毒下界夹平——窗口是 [计划创建−1min, now+2min]，样本必须发生在对应计划创建之后）
+- [x] **校准断言**：`SELECT * FROM behavior_learning` 出一行（sample_count=6、SHRINK_V1、estimate≈5.36）；`GET /morning/context` 返回 `calibration` 字段；再 evaluate 一次，新计划详情 modelVersion = `QUANTILE_V1+CAL(n=6)`；后端日志出现 `Wake latency calibrated`（2026-10-30，用秒级延迟 30~105s：estimate=2.4318 与公式 `(5×4+6×1.125)/11` 逐位吻合、modelVersion=`QUANTILE_V1+CAL(n=6)`、calibration 字段返回）
+- [x] **出门事件幂等**：同一 planId 连发两次 USER_LEFT_HOME（不同 eventId、同 occurredAt）→ `SELECT left_home_at FROM wake_history WHERE plan_id=...` 只记第一次（2026-10-30，left_home_at 只记首次）
+- [x] **贪睡语义回归**（`ecea2e8` 修复项）：同一 planId 依次发 ALARM_FIRED(t0) → ALARM_SNOOZED → ALARM_FIRED(t0+5min) → ALARM_DISMISSED(t0+12min) → `triggered_at` 应为 t0（首次响铃），校准样本延迟含贪睡 5 分钟（2026-10-30 秒级变体：triggered_at=首次响铃 t0、dismissed_at=t0+110s，first-write-wins 生效）
+- [x] **BYOK 运行时冒烟**（`af862e4` 后端 + `e9411cb` Android 实装）：起后端 → knife4j `GET /me/external-services` 看默认状态（AMAP/LLM 按 `AMAP_KEY`/`LLM_*` 是否配置显示 SERVER 或 OFF）→ PUT 用户级高德 key（真 key）→ evaluate 的 modelVersion 含 `+ETA`、traffic.etaSource=AMAP → PUT `{disabled:true}` → evaluate 回落手填分钟且无报错 → GET 确认任何响应都无 api_key 明文；LLM 三项同理（配真端点看 LLM 文案、只填两项看 400 提示）；App 端统计页入口 → 设置页四态流转（继承→你的 key→禁用→恢复默认）（2026-10-30 后端全链路验证通过：真 key 写入→+ETA 生效→禁用回落→清除恢复、LLM 真端点（OpenAI 兼容 glm-5.3-flash）文案生成正常且失败回落模板、只填两项 400 提示正确、全程无 api_key 明文；**App 端设置页四态流转待真机**）
+- [x] **准备时长校准端到端**（`c0d7b63` 后端 + `44a2529` Android 实装）：doc.html 造 ≥5 条同时含 ALARM_DISMISSED + USER_LEFT_HOME 的历史（出门距关闭 36/42/48/54/60 分钟，occurredAt 用过去时刻）→ `SELECT * FROM behavior_learning WHERE feature_key='PREP_DURATION'` 出一行（sample_count≥5、PREP_SHRINK_V1、estimate≈实际/设定比率）→ 再 evaluate 新计划 modelVersion 含 `+PREP(n=5)` → `GET /morning/context` 的 calibration 带 prepSampleCount/prepRatioP50 → App 首页出现"准备时长按最近 N 次出门校准（约设定的 X 倍）"（2026-10-30 后端部分：prepSampleCount=5、prepRatioP50=1.2333 与公式吻合、modelVersion 含 `+PREP(n=5)`；App 首页提示待真机）
+- [x] **occurredAt 消毒**（`6593cc8` 后端 + `c9ae1fd` Android 实装）：向 device-events 发 occurredAt=未来 1 小时 → 请求成功、`SELECT occurred_at FROM device_event WHERE event_id=...` 夹到 now+2min 且日志出 `Device event time sanitized`；发非法字符串 → 同样成功不 500、occurred_at≈接收时刻；App 端改系统时间 +10 分钟后成功发一次请求（学到 offset）→ 后续事件上报时刻应已被校正（2026-10-30 后端部分：未来 1h 夹到 now+2min（clampedToCeiling=true）、非法串兜底接收时刻（fellBackToNow=true）、日志留痕；App 端 offset 学习待真机）
 
 ### Android（需要模拟器/真机）
 
