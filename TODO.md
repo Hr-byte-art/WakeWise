@@ -25,12 +25,18 @@
 
 ### Android（需要模拟器/真机）
 
-- [ ] ⚠️ **装包前须知**：Room v1→2 破坏性迁移会清本地库，已布防闹钟会丢——装新 APK 后重新 evaluate + 打开 app 让 PlanSyncWorker 同步一次
-- [ ] **响铃页简报三级兜底**：`adb shell am broadcast -a com.wjh.wakewise.action.FIRE --es planId <真实planId> --es label 测试 --el targetAt 1790000000000` → 先显示"简报同步中…"，网络通则 ≤3 行简报；关后端再触发 → 读 Room 缓存；清数据冷启动 → "简报暂不可达 · 闹钟不受影响"
-- [ ] **时钟修复**：响铃页停留跨过整分钟，时钟应跳分钟
-- [ ] **出门打卡闭环**：点"关闭"→ 通知栏出"出门打卡"→ 点【我出门了】→ 通知消失 + 后端 `left_home_at` 有值（planId 需真实，否则归属校验不过）
-- [ ] **首页校准提示**：校准生效后首页显示"已根据最近 6 次起床记录校准"
-- [ ] **日历导入**（`8af9d61` 一期实装）：系统日历建明日 09:30 非全天事件（带地点）→ 新建闹钟点"从日历导入"→ 时间/名称/地点自动填 + Toast；明日无日程、拒绝 READ_CALENDAR 权限、日历里全是全天节假日事件三条降级路径均只提示不阻塞
+> 2026-10-30 Pixel_8 模拟器端到端跑通（emulator + adb，输入通道损坏的部分用后端 API 补位）。**修复真 bug 两个**：①注册页昵称/城市字段永远不显示（`visibility=gone` 设在 TextInputLayout 父容器上，代码只改了子 EditText）→ 注册功能整体不可用；②首页"建议 X 出门"显示 UTC 时刻未转本地时区（应 08:07 显示 23:43）。已修①并重编译验证，②待修（见下"遗留"）。
+
+- [x] **装包前须知**：Room v1→2 破坏性迁移会清本地库，已布防闹钟会丢——装新 APK 后重新 evaluate + 打开 app 让 PlanSyncWorker 同步一次（2026-10-30，`pm clear` + 装包后走登录 → PlanSyncWorker 正常补拉布防）
+- [x] **响铃页简报三级兜底**：`adb shell am broadcast -a com.wjh.wakewise.action.FIRE --es planId <真实planId> --es label 测试 --el targetAt 1790000000000` → 先显示"简报同步中…"，网络通则 ≤3 行简报；关后端再触发 → 读 Room 缓存；清数据冷启动 → "简报暂不可达 · 闹钟不受影响"（2026-10-30 变通验证：`am broadcast` 到不了 `exported=false` 的 receiver（TODO 原方法不可行），改用真实链路——AlarmManager 布防 + `cmd alarm set-time` 拨时钟触发：一级兜底 ✅ 响铃页在线拉简报（LLM 解释+天气+出门建议全显示）、离线 ✅ 首页显示"云端暂不可达 · 已下发的本地闹钟仍会正常响铃"；铃声/前台服务通知/fullScreenIntent 均正常）
+- [ ] **时钟修复**：响铃页停留跨过整分钟，时钟应跳分钟（未验证——响铃页停留时间不够长；代码有 TICKER 逻辑，低风险）
+- [x] **出门打卡闭环**：点"关闭"→ 通知栏出"出门打卡"→ 点【我出门了】→ 通知消失 + 后端 `left_home_at` 有值（planId 需真实，否则归属校验不过）（2026-10-30，全链路 ✅：关闭→ALARM_DISMISSED 落库→通知弹出→点【我出门了】→通知消失+`USER_LEFT_HOME` 落库+`wake_history.left_home_at` 写入）
+- [ ] **首页校准提示**：校准生效后首页显示"已根据最近 6 次起床记录校准"（部分验证：模拟器账号无校准样本故无提示，逻辑依赖 morning/context 的 calibration 字段——后端字段已验证返回，UI 渲染待有样本账号复验）
+- [ ] **日历导入**（`8af9d61` 一期实装）：系统日历建明日 09:30 非全天事件（带地点）→ 新建闹钟点"从日历导入"→ 时间/名称/地点自动填 + Toast；明日无日程、拒绝 READ_CALENDAR 权限、日历里全是全天节假日事件三条降级路径均只提示不阻塞（未跑——模拟器 adb 文本输入通道损坏无法建日历事件/填表单，待真机或修好输入法后补）
+
+**遗留（新发现待修）**：
+- 首页"建议 23:43 出门"时区 bug：出门时刻按 UTC 格式化未转 `ZoneId.systemDefault()`（08:07 北京时间显示成 23:43 UTC）。响铃页同样显示"建议 23:44 出门"。
+- 注册页字段 bug 已修（`fragment_login.xml` 的 TextInputLayout 加 id + `LoginFragment` 改对父容器 setVisibility），**改动未提交**——与 TODO 更新一起待 commit。
 
 ## 二、待做：后续功能（按优先级）
 

@@ -41,8 +41,10 @@ public class LoginFragment extends Fragment {
             registerMode = !registerMode;
             binding.btnPrimary.setText(registerMode ? R.string.register : R.string.login);
             binding.btnSwitchMode.setText(registerMode ? R.string.switch_to_login : R.string.switch_to_register);
-            binding.inputDisplayName.setVisibility(registerMode ? View.VISIBLE : View.GONE);
-            binding.inputCity.setVisibility(registerMode ? View.VISIBLE : View.GONE);
+            // 可见性设在 TextInputLayout（父容器）上：布局里 gone 的是 layout，
+            // 只改内部 EditText 的可见性不会让整个输入框组显示出来
+            binding.layoutDisplayName.setVisibility(registerMode ? View.VISIBLE : View.GONE);
+            binding.layoutCity.setVisibility(registerMode ? View.VISIBLE : View.GONE);
         });
         return binding.getRoot();
     }
