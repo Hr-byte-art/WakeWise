@@ -35,8 +35,8 @@
 - [ ] **日历导入**（`8af9d61` 一期实装）：系统日历建明日 09:30 非全天事件（带地点）→ 新建闹钟点"从日历导入"→ 时间/名称/地点自动填 + Toast；明日无日程、拒绝 READ_CALENDAR 权限、日历里全是全天节假日事件三条降级路径均只提示不阻塞（未跑——模拟器 adb 文本输入通道损坏无法建日历事件/填表单，待真机或修好输入法后补）
 
 **遗留（新发现待修）**：
-- 首页"建议 23:43 出门"时区 bug：出门时刻按 UTC 格式化未转 `ZoneId.systemDefault()`（08:07 北京时间显示成 23:43 UTC）。响铃页同样显示"建议 23:44 出门"。
-- 注册页字段 bug 已修（`fragment_login.xml` 的 TextInputLayout 加 id + `LoginFragment` 改对父容器 setVisibility），**改动未提交**——与 TODO 更新一起待 commit。
+- ~~首页"建议 23:43 出门"时区 bug~~ **已澄清为误报**：模拟器时区是 GMT，App 代码 `withZone(ZoneId.systemDefault())` 本来正确；时区切到 Asia/Shanghai 后显示正常（明早 07:31 / 建议 08:10 出门）。无需修复。
+- 注册页字段 bug 已修（`fragment_login.xml` 的 TextInputLayout 加 id + `LoginFragment` 改对父容器 setVisibility），已提交 `b685023`。
 
 ## 二、待做：后续功能（按优先级）
 
